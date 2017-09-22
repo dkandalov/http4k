@@ -6,7 +6,6 @@ import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.parse
 import org.http4k.core.then
-import org.http4k.filter.CacheTrafficTo.RecordMode
 import java.io.File
 import java.util.*
 
@@ -31,16 +30,18 @@ object ServeCachedTrafficFrom {
 
 object CacheTrafficTo {
 
-    // replace with predicate...
-    enum class RecordMode(private vararg val record: RecordMode) {
-        None(), RequestOnly(), ResponseOnly(), All(RequestOnly, ResponseOnly);
+    object Disk {
+        operator fun invoke(baseDir: String = ".", predicate: (HttpMessage) -> Boolean = { true }) = Filter { next ->
+            {
+                val requestFolder = it.toFolder(baseDir)
+                requestFolder.mkdirs()
 
-        fun store(file: File, r: org.http4k.core.Request) {
-            if (record.contains(RequestOnly)) r.writeTo(file)
-        }
+                if (predicate(it)) it.writeTo(File(requestFolder, "request.txt"))
 
-        fun store(file: File, r: Response) {
-            if (record.contains(ResponseOnly)) r.writeTo(file)
+                next(it).apply {
+                    if (predicate(this)) this.writeTo(File(requestFolder, "request.txt"))
+                }
+            }
         }
 
         private fun HttpMessage.writeTo(file: File) {
@@ -49,24 +50,11 @@ object CacheTrafficTo {
         }
     }
 
-    object Disk {
-        operator fun invoke(baseDir: String = ".", mode: RecordMode = RecordMode.All) = Filter { next ->
-            {
-                val requestFolder = it.toFolder(baseDir)
-                requestFolder.mkdirs()
-                mode.store(File(requestFolder, "request.txt"), it)
-                next(it).apply {
-                    mode.store(File(requestFolder, "response.txt"), this)
-                }
-            }
-        }
-    }
-
     object Memory {
-        operator fun invoke(cache: MutableMap<Request, Response>) = Filter { next ->
-            {
-                next(it).apply {
-                    cache[it] = this
+        operator fun invoke(cache: MutableMap<Request, Response>, shouldSave: (HttpMessage) -> Boolean = { true }) = Filter { next ->
+            { req: Request ->
+                next(req).apply {
+                    if (shouldSave(req) || shouldSave(this)) cache[req] = this
                 }
             }
         }
@@ -74,15 +62,14 @@ object CacheTrafficTo {
 }
 
 object SimpleCachingFrom {
-    fun Disk(baseDir: String = ".", mode: RecordMode = RecordMode.All): Filter =
-        ServeCachedTrafficFrom.Disk(baseDir).then(CacheTrafficTo.Disk(baseDir, mode))
+    fun Disk(baseDir: String = ".", shouldSave: (HttpMessage) -> Boolean = { true }): Filter =
+        ServeCachedTrafficFrom.Disk(baseDir).then(CacheTrafficTo.Disk(baseDir, shouldSave))
 
-    fun Memory(): Filter {
+    fun Memory(shouldSave: (HttpMessage) -> Boolean = { true }): Filter {
         val cache = linkedMapOf<Request, Response>()
-        return ServeCachedTrafficFrom.Memory(cache).then(CacheTrafficTo.Memory(cache))
+        return ServeCachedTrafficFrom.Memory(cache).then(CacheTrafficTo.Memory(cache, shouldSave))
     }
 }
 
-private fun Request.toFolder(baseDir: String): File = File(File(if (baseDir.isEmpty()) "." else baseDir, uri.path), this.identify())
-
-private fun HttpMessage.identify() = String(Base64.getEncoder().encode(toString().toByteArray()))
+private fun Request.toFolder(baseDir: String) =
+    File(File(if (baseDir.isEmpty()) "." else baseDir, uri.path), String(Base64.getEncoder().encode(toString().toByteArray())))

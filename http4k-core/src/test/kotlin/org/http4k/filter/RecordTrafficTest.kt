@@ -17,7 +17,7 @@ fun main(args: Array<String>) {
 
     val disk = SimpleCachingFrom.Disk().then(next)
 
-    val memory = SimpleCachingFrom.Memory().then(next)
+    val memory = SimpleCachingFrom.Memory { true }.then(next)
 
     val request = Request(Method.GET, "/asdasd/foo?asdas=asdasd").body("hello").header("asdas", "asdsad")
     println(disk(request))
