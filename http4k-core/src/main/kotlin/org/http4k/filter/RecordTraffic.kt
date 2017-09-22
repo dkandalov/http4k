@@ -6,11 +6,11 @@ import org.http4k.core.Request
 import org.http4k.core.Response
 import org.http4k.core.parse
 import org.http4k.core.then
-import org.http4k.filter.TrafficStore.RecordMode
+import org.http4k.filter.CacheTrafficTo.RecordMode
 import java.io.File
 import java.util.*
 
-object TrafficCache {
+object ServeCachedTrafficFrom {
     object Disk {
         operator fun invoke(baseDir: String = ".") = Filter { next ->
             {
@@ -29,7 +29,7 @@ object TrafficCache {
     }
 }
 
-object TrafficStore {
+object CacheTrafficTo {
 
     // replace with predicate...
     enum class RecordMode(private vararg val record: RecordMode) {
@@ -73,13 +73,13 @@ object TrafficStore {
     }
 }
 
-object TrafficCachingProxy {
+object SimpleCachingFrom {
     fun Disk(baseDir: String = ".", mode: RecordMode = RecordMode.All): Filter =
-        TrafficCache.Disk(baseDir).then(TrafficStore.Disk(baseDir, mode))
+        ServeCachedTrafficFrom.Disk(baseDir).then(CacheTrafficTo.Disk(baseDir, mode))
 
     fun Memory(): Filter {
         val cache = linkedMapOf<Request, Response>()
-        return TrafficCache.Memory(cache).then(TrafficStore.Memory(cache))
+        return ServeCachedTrafficFrom.Memory(cache).then(CacheTrafficTo.Memory(cache))
     }
 }
 

@@ -7,15 +7,17 @@ import org.http4k.core.Response
 import org.http4k.core.Status
 import org.http4k.core.then
 
+// 1. record and cache data
+// 2. record and play back requests
 
 fun main(args: Array<String>) {
     val next: HttpHandler = {
         Response(Status.OK).body("hello")
     }
 
-    val disk = TrafficCachingProxy.Disk().then(next)
+    val disk = SimpleCachingFrom.Disk().then(next)
 
-    val memory = TrafficCachingProxy.Memory().then(next)
+    val memory = SimpleCachingFrom.Memory().then(next)
 
     val request = Request(Method.GET, "/asdasd/foo?asdas=asdasd").body("hello").header("asdas", "asdsad")
     println(disk(request))
@@ -23,4 +25,6 @@ fun main(args: Array<String>) {
 
     println(memory(request))
     println(memory(request))
+
+    CacheTrafficTo.Disk()
 }
