@@ -13,8 +13,9 @@ object ServeCachedTrafficFrom {
     object Disk {
         operator fun invoke(baseDir: String = ".") = Filter { next ->
             {
-                val file = File(it.toFolder(baseDir), "response.txt")
-                if (file.exists()) Response.parse(String(file.readBytes())) else next(it)
+                it.toFile(baseDir.toBaseFolder()).run {
+                    if (exists()) Response.parse(String(readBytes())) else next(it)
+                }
             }
         }
     }
@@ -28,25 +29,47 @@ object ServeCachedTrafficFrom {
     }
 }
 
+object RecordTrafficTo {
+    object Disk {
+        operator fun invoke(baseDir: String = ".",
+                            predicate: (HttpMessage) -> Boolean = { true },
+                            id: () -> String = { System.currentTimeMillis().toString() }): Filter =
+            Filter { next ->
+                {
+                    if (predicate(it)) it.writeTo(File(baseDir.toBaseFolder(), id()))
+                    next(it).apply {
+                        if (predicate(this)) writeTo(File(baseDir.toBaseFolder(), id()))
+                    }
+                }
+            }
+    }
+
+    object Memory {
+        operator fun invoke(list: MutableList<Pair<Request, Response>>, shouldSave: (HttpMessage) -> Boolean = { true }): Filter =
+            Filter { next ->
+                { req ->
+                    next(req).apply {
+                        if (shouldSave(req) || shouldSave(this)) list += req to this
+                    }
+                }
+            }
+
+    }
+}
+
 object CacheTrafficTo {
 
     object Disk {
-        operator fun invoke(baseDir: String = ".", predicate: (HttpMessage) -> Boolean = { true }) = Filter { next ->
+        operator fun invoke(baseDir: String = ".", shouldSave: (HttpMessage) -> Boolean = { true }) = Filter { next ->
             {
-                val requestFolder = it.toFolder(baseDir)
-                requestFolder.mkdirs()
+                val requestFolder = File(File(baseDir.toBaseFolder(), it.uri.path), String(Base64.getEncoder().encode(it.toString().toByteArray())))
 
-                if (predicate(it)) it.writeTo(File(requestFolder, "request.txt"))
+                if (shouldSave(it)) it.writeTo(requestFolder)
 
                 next(it).apply {
-                    if (predicate(this)) this.writeTo(File(requestFolder, "request.txt"))
+                    if (shouldSave(this)) this.writeTo(requestFolder)
                 }
             }
-        }
-
-        private fun HttpMessage.writeTo(file: File) {
-            file.createNewFile()
-            file.writeBytes(toString().toByteArray())
         }
     }
 
@@ -71,5 +94,15 @@ object SimpleCachingFrom {
     }
 }
 
-private fun Request.toFolder(baseDir: String) =
-    File(File(if (baseDir.isEmpty()) "." else baseDir, uri.path), String(Base64.getEncoder().encode(toString().toByteArray())))
+private fun HttpMessage.writeTo(folder: File) {
+    toFile(folder).apply {
+        folder.mkdirs()
+        createNewFile()
+        writeBytes(toString().toByteArray())
+    }
+}
+
+private fun String.toBaseFolder(): File = File(if (isEmpty()) "." else this)
+
+private fun HttpMessage.toFile(folder: File): File = File(folder, if (this is Request) "request.txt" else "response.txt")
+
