@@ -7,7 +7,7 @@ import org.http4k.format.KondorJson
 
 class KondorJsonSchemaCreator(
     private val json: KondorJson,
-    private val refLocationPrefix: String = "components/schema",
+    private val refLocationPrefix: String = "components/schemas",
 ) : JsonSchemaCreator<Any, JsonNode> {
     private val delegate = JsonToJsonSchema(json)
 
