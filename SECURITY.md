@@ -10,6 +10,41 @@ Report either through GitHub's
 described in our [Coordinated Vulnerability Disclosure policy](https://www.http4k.org/cvd-policy/),
 which explains how to report, what to expect, and our disclosure timelines.
 
+## Vulnerability identifiers: advisories and CVEs
+
+For every confirmed vulnerability we publish a GitHub Security Advisory (GHSA) against the affected
+repository. The GHSA is our canonical disclosure record: it is carried by the GitHub Advisory
+Database, OSV, Dependabot and the major SCA tools, so downstream consumers are notified and can
+remediate whether or not a CVE identifier has also been assigned.
+
+We request a CVE identifier where assignment is warranted and adds value to consumers. That is
+assessed per advisory, taking into account:
+
+- whether the issue is reachable by an untrusted party against a supported configuration;
+- the assessed severity (CVSS v3.1);
+- whether the change fixes a defect, or hardens a default that requires a specific application-side
+  configuration before it has any effect;
+- whether downstream consumers need a CVE identifier to track remediation in their own tooling.
+
+Where we decide not to request a CVE, the reasoning is recorded on the advisory. 
+
+### Requests to assign a CVE to an already-published advisory
+
+We receive requests asking us to request a CVE for an advisory that is already public, frequently in
+bulk and without new technical content. For clarity on how these are handled:
+
+- Requests containing no new technical information are closed as duplicates of the existing advisory,
+  without individual re-assessment.
+- Requests that demonstrate impact we had not accounted for — a reproduction, a working attack path
+  against a supported configuration, or a materially different impact assessment — are very welcome.
+  We will reassess promptly and request a CVE where the reassessment warrants it.
+- Credit on an advisory is given for discovery of a vulnerability, or for material contribution to
+  its analysis or remediation. We do not add attribution for administrative or coordination requests
+  relating to advisories that are already public.
+
+Nothing in this policy prevents a third party from seeking a CVE identifier directly from MITRE or
+another CNA; we simply do not undertake to request one on their behalf.
+
 ## Verifying releases
 
 See [VERIFYING.md](VERIFYING.md) for instructions on verifying the integrity, authenticity, and
