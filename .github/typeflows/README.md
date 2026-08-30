@@ -10,6 +10,7 @@ flowchart LR
     repositorydispatchgithubrepository(["🔔 repository_dispatch<br/>→ this repo"])
     repositorydispatchmatrixrepo(["🔔 repository_dispatch<br/>→ ${{ matrix.repo }}"])
     buildhttp4kyml["Build"]
+    dcoyml["DCO"]
     broadcastreleaseyml["Broadcast Release"]
     newreleasegithubyml["New Release - GitHub"]
     newreleaseupgradebranchesyml["New Release - Update other projects"]
@@ -28,6 +29,7 @@ flowchart LR
     push -->|"branches(only: 1), paths(ignore: 1)"|securitycodeqlyml
     push -->|"branches(only: 1)"|ossfscorecardyml
     pullrequest -->|"(*), branches(ignore: 1), paths(ignore: 1)"|buildhttp4kyml
+    pullrequest -->|"(opened, synchronize, reopened)"|dcoyml
     pullrequest -->|"(*), paths(ignore: 1)"|securitycodeqlyml
     schedule -->|"0 * * * *"|broadcastreleaseyml
     schedule -->|"0 8 * * 1"|updatedependenciesyml
@@ -51,6 +53,7 @@ flowchart LR
 
 - [Broadcast Release](./broadcast-release/)
 - [Build](./build-http4k/)
+- [DCO](./dco/)
 - [New Release - GitHub](./new-release-github/)
 - [New Release - Slack](./new-release-slack/)
 - [New Release - Update other projects](./new-release-upgrade-branches/)

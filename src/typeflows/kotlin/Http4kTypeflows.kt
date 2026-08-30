@@ -17,9 +17,10 @@ import workflows.BroadcastRelease
 import workflows.Build
 import workflows.CreateGithubRelease
 import workflows.CreateUpgradeBranches
+import workflows.Dco
+import workflows.OssfScorecard
 import workflows.PublishArtifacts
 import workflows.ReleaseApi
-import workflows.OssfScorecard
 import workflows.SecurityCodeql
 import workflows.SecurityDependabot
 import workflows.SendToSlack
@@ -40,6 +41,7 @@ class Http4kTypeflows : Builder<TypeflowsGitHubRepo> {
             }
 
             workflows += Build()
+            workflows += Dco()
             workflows += BroadcastRelease()
             workflows += CreateGithubRelease()
             workflows += CreateUpgradeBranches()
@@ -65,8 +67,16 @@ class Http4kTypeflows : Builder<TypeflowsGitHubRepo> {
 
             workflows += OssfScorecard()
 
-            files += MarkdownContent.of("<!-- Love http4k? Please consider sponsoring the project: \uD83D\uDC49  https://github.com/sponsors/http4k -->")
+            files += MarkdownContent.of(SPONSOR_BANNER)
                 .asTypeflowsFile("ISSUE_TEMPLATE.md")
+
+            files += MarkdownContent.of(
+                """
+                $SPONSOR_BANNER
+
+                - [ ] I have signed off all my commits (`git commit -s`) - see [CONTRIBUTING.md](../CONTRIBUTING.md#developer-certificate-of-origin-dco)
+                """.trimIndent()
+            ).asTypeflowsFile("pull_request_template.md")
 
             files += TextContent.of("automerge: [auto/*]").asTypeflowsFile("pr-labeler.yml")
 
@@ -76,3 +86,6 @@ class Http4kTypeflows : Builder<TypeflowsGitHubRepo> {
         files += Http4kProjectStandards()
     }
 }
+
+private const val SPONSOR_BANNER =
+    "<!-- Love http4k? Please consider sponsoring the project: \uD83D\uDC49  https://github.com/sponsors/http4k -->"
