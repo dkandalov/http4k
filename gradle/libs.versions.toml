@@ -103,9 +103,7 @@ moshi = "1.15.2"
 mysql-connector-java = "8.0.33"
 netty-codec-http2 = "4.2.17.Final"
 nu-studer-rocker = "3.3.1"
-# Blocked on 4.3.0
-# @pin
-okhttp-eventsource = "4.3.0"
+okhttp-eventsource = "5.0.0"
 okhttp3 = "5.5.0"
 openfeature-sdk = "1.22.1"
 opentelemetry-bom = "1.65.0"
