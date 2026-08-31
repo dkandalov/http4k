@@ -96,6 +96,10 @@
         },
         {
             "bundleName": "bsd0",
+            "licenseNamePattern": "BSD\\-0\\-Clause"
+        },
+        {
+            "bundleName": "bsd0",
             "licenseNamePattern": "BSD Zero Clause"
         },
         {
