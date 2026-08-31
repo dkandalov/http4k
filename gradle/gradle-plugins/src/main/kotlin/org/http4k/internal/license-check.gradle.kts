@@ -47,3 +47,10 @@ tasks.named("checkLicense") {
         project != rootProject
     }
 }
+
+listOf("generateLicenseReport", "checkLicense").forEach {
+    tasks.named(it) {
+        inputs.file("${project.rootProject.projectDir}/compliance/license-normalizer-bundle.json")
+        inputs.file("${project.rootProject.projectDir}/compliance/allowed-licenses.json")
+    }
+}
