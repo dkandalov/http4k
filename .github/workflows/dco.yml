@@ -25,10 +25,6 @@ jobs:
         # Authors exempt from sign-off. Edit this list to add/remove bots.
         BOT_AUTHORS="dependabot[bot] github-actions[bot] renovate[bot]"
 
-        # On pull_request, actions/checkout leaves us on refs/pull/N/merge, whose parent 1 is the
-        # live base tip and parent 2 is the PR head - exactly the range GitHub shows in the diff.
-        # Prefer that: base.sha in the event payload goes stale on long-lived PRs, and a stale base
-        # drags already-merged base commits into the range and fails the PR for someone else's work.
         if git rev-parse -q --verify HEAD^2 >/dev/null; then
           RANGE_START=$(git rev-parse HEAD^1)
           RANGE_END=$(git rev-parse HEAD^2)

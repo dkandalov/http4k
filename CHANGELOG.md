@@ -7,6 +7,10 @@ Given version `A.B.C.D`, breaking changes are to be expected in version number i
 
 > **Distribution notice** - from 1 October 2026, Maven Central receives http4k releases approximately quarterly. [maven.http4k.org](https://maven.http4k.org) continues on the normal 1-2 week cadence. Both channels are supported. Background and current status: **[DISTRIBUTION.md](https://www.http4k.org/distribution/)**
 
+### v6.59.0.0
+- **http4k-***: Upgrade versions & Gradle
+- **http4k-web-htmx**: [Break] Upgrade to HTMX 4.0.0 so webjars will have changed
+
 ### v6.58.1.0
 - **http4k-***: Upgrade versions & Gradle
 - **http4k-template-kotlinx-html**: [New module!] Renders `kotlinx-html` DSL views as http4k `TemplateRenderer`s.

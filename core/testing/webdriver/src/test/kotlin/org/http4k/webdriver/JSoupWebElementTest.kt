@@ -44,7 +44,7 @@ class JSoupWebElementTest {
             <input id="checkbox" name="uncheckedCheckbox" type="checkbox" value="uncheckedCheckbox"/>
             <input id="radio" name="radio" type="radio" value="checkedRadio" checked/>
             <input id="radio" name="radio" type="radio" value="uncheckedRadio"/>
-            <textarea id="textarea" value="bob"/>
+            <textarea id="textarea" value="bob"></textarea>
             <p>inner</p>
         </form>
         """)).findElement(By.tagName("form"))
