@@ -9,7 +9,17 @@ Given version `A.B.C.D`, breaking changes are to be expected in version number i
 
 ### v6.59.0.0 (uncut)
 - **http4k-***: Upgrade versions & Gradle
-- **http4k-web-htmx**: [Break] Upgrade to HTMX 4.0.0 so webjars will have changed
+- **http4k-web-htmx**: [Break] Upgrade to HTMX 4.0.0 so webjars will have changed URL and version we are shipping. If you're not on HTMX 4 then expect breaks.
+- **http4k-connect-ai-anthropic-***: [Break] The Messages API model is much more complete, so a few things move. In rough order of how likely you are to hit them:
+  - Handling response content: `Content` has many more arms plus an `Unknown`.
+  - Setting a system prompt: `system` is a `List<Content.Text>` rather than a `SystemPrompt`.
+  - Using tools: `Tool(name, description, schema)` becomes `Tool.User(name, schema, description)`, and `ToolResult.content` is a `List<Content>` rather than `Any`.
+  - Sending images: `Source(data, mediaType)` becomes `Source.Base64(data, mediaType)`.
+  - Streaming: `MessageGenerationEvent` gains `StopMessage` at the end of the stream and an `Unknown` arm, and `Error` carries `ErrorDetail(type, message)`.
+- **http4k-connect-ai-anthropic-***: [Fix] `temperature`, `top_k` and `top_p` only sent when set. Opus 4.7+, preventing request failure.
+- **http4k-ai-llm-anthropic**: [Fix] Claude 5 models return a `Thinking` block by default, which the chat shim rejected.
+- **http4k-connect-ai-anthropic-fake**: [Fix] Streamed responses emit a complete event sequence.
+- **http4k-ai-core**: [Break] `toCompletionSequence` is replaced by `toSseSequence` and `toJsonLinesSequence`.
 
 ### v6.58.1.0
 - **http4k-***: Upgrade versions & Gradle

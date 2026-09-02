@@ -30,7 +30,7 @@ fun InputStream.chunkedSseSequence(maxMessageSize: Int = DEFAULT_MAX_MESSAGE_SIZ
                     is ConsumingTrailingLineBreak -> null // No buffer to emit
                 }
                 if (!finalBuffer.isNullOrEmpty() && finalBuffer.length <= maxMessageSize) {
-                    val content = finalBuffer.toString().trim()
+                    val content = finalBuffer.decodeUtf8().trim()
                     if (content.isNotEmpty()) {
                         try {
                             yield(SseMessage.parse(content))
@@ -129,13 +129,15 @@ fun InputStream.chunkedSseSequence(maxMessageSize: Int = DEFAULT_MAX_MESSAGE_SIZ
     }
 }
 
+private fun StringBuilder.decodeUtf8() = String(toString().toByteArray(Charsets.ISO_8859_1), Charsets.UTF_8)
+
 private fun StringBuilder.appendIfBelow(c: Char, max: Int) {
     if (length <= max) append(c)
 }
 
 private suspend fun SequenceScope<SseMessage>.emitMessage(buffer: StringBuilder, maxMessageSize: Int) {
     if (buffer.length <= maxMessageSize) {
-        val content = buffer.toString().trimEnd('\r', '\n')
+        val content = buffer.decodeUtf8().trimEnd('\r', '\n')
         if (content.isNotEmpty()) {
             try {
                 yield(SseMessage.parse(content))

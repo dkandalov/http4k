@@ -8,7 +8,6 @@ import org.http4k.ai.llm.tools.LLMTool
 import org.http4k.ai.llm.tools.ToolRequest
 import org.http4k.ai.model.RequestId
 import org.http4k.ai.model.TokenUsage
-import org.http4k.connect.anthropic.SourceType.base64
 import org.http4k.connect.anthropic.ToolChoice
 import org.http4k.connect.anthropic.ToolUseId
 import org.http4k.connect.anthropic.action.Content
@@ -24,8 +23,7 @@ fun MessageCompletionResponse.toMetadata() =
     ChatResponse.Metadata(id, model, TokenUsage(usage.input_tokens, usage.output_tokens))
 
 fun List<Content>.toLLM() = Message.Assistant(
-    filterNot { it is Content.ToolUse }
-        .map(Content::toLLM),
+    mapNotNull(Content::toLLM),
     filterIsInstance<Content.ToolUse>()
         .map { ToolRequest(RequestId.of(it.id.value), it.name, it.input) })
 
@@ -36,7 +34,7 @@ fun Message.toAnthropic() = when (this) {
 
     is Message.System -> System(Content.Text(text))
 
-    is Message.ToolResult -> User(Content.ToolResult(ToolUseId.of(id.value), text))
+    is Message.ToolResult -> User(Content.ToolResult(ToolUseId.of(id.value), listOf(Content.Text(text))))
 
     is Message.User -> User(contents.map { it.toAnthropic() })
 
@@ -44,7 +42,7 @@ fun Message.toAnthropic() = when (this) {
 }
 
 fun Resource.toAnthropic(): Source = when (this) {
-    is Resource.Binary -> Source(content, mimeType ?: IMAGE_JPG, base64)
+    is Resource.Binary -> Source.Base64(content, mimeType ?: IMAGE_JPG)
     is Resource.Ref -> error("Unsupported resource type: ${this::class.simpleName}")
 }
 
@@ -56,10 +54,15 @@ fun org.http4k.ai.llm.model.Content.toAnthropic() = when (this) {
     else -> error("Unsupported content type: ${this::class.simpleName}")
 }
 
-fun Content.toLLM() = when (this) {
-    is Content.Image -> org.http4k.ai.llm.model.Content.Image(Resource.Binary(source.data, source.media_type))
+fun Content.toLLM(): org.http4k.ai.llm.model.Content? = when (this) {
+    is Content.Image -> when (val s = source) {
+        is Source.Base64 -> org.http4k.ai.llm.model.Content.Image(Resource.Binary(s.data, s.media_type))
+        else -> null
+    }
+
     is Content.Text -> org.http4k.ai.llm.model.Content.Text(text)
-    else -> error("Unsupported content type: ${this::class.simpleName}")
+
+    else -> null
 }
 
 fun ToolSelection.toLLM() = when (this) {
@@ -67,4 +70,4 @@ fun ToolSelection.toLLM() = when (this) {
     Required -> ToolChoice.Auto(true)
 }
 
-fun LLMTool.toAnthropic() = Tool(name, description, inputSchema)
+fun LLMTool.toAnthropic() = Tool.User(name, inputSchema, description)

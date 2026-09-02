@@ -3,6 +3,7 @@ package org.http4k.connect.anthropic
 import com.natpryce.hamkrest.assertion.assertThat
 import com.natpryce.hamkrest.greaterThan
 import com.natpryce.hamkrest.isA
+import com.natpryce.hamkrest.isEmpty
 import org.http4k.ai.model.MaxTokens
 import org.http4k.connect.ResourceLoader
 import org.http4k.connect.TestResources
@@ -26,12 +27,12 @@ interface AnthropicAIContract {
     @Test
     fun `generate message response non-stream`(resourceLoader: ResourceLoader) {
         val responses = anthropicAi.messageCompletion(
-            AnthropicModels.Claude_Haiku_4_5,
+            AnthropicModels.Claude_Sonnet_5,
             listOf(
                 Message.User(
                     listOf(
                         Content.Image(
-                            Source(
+                            Source.Base64(
                                 Base64Blob.encode(resourceLoader.stream("dog.png")),
                                 MimeType.IMAGE_PNG
                             )
@@ -49,7 +50,7 @@ interface AnthropicAIContract {
     @Test
     fun `generate message response stream`() {
         val responses = anthropicAi.messageCompletionStream(
-            AnthropicModels.Claude_Haiku_4_5,
+            AnthropicModels.Claude_Sonnet_5,
             listOf(
                 Message.User(listOf(Content.Text("You are Leonardo Da Vinci")))
             ),
@@ -57,5 +58,22 @@ interface AnthropicAIContract {
         ).successValue().toList()
 
         assertThat(responses.first(), isA<MessageGenerationEvent.StartMessage>())
+    }
+
+    @Test
+    fun `count the tokens in a prompt`() {
+        val count = anthropicAi.countTokens(
+            AnthropicModels.Claude_Sonnet_5,
+            listOf(Message.User(Content.Text("how many tokens is this?")))
+        ).successValue()
+
+        assertThat(count.input_tokens, greaterThan(0))
+    }
+
+    @Test
+    fun `list the available models`() {
+        val models = anthropicAi.getModels().successValue()
+
+        assertThat(models.data, !isEmpty)
     }
 }

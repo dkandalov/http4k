@@ -9,7 +9,7 @@ import org.http4k.ai.model.ResponseId
 import org.http4k.ai.model.Role
 import org.http4k.ai.model.StopReason
 import org.http4k.ai.model.Temperature
-import org.http4k.ai.util.toCompletionSequence
+import org.http4k.ai.util.toSseSequence
 import org.http4k.connect.Http4kConnectAction
 import org.http4k.connect.RemoteFailure
 import org.http4k.connect.model.Timestamp
@@ -135,7 +135,7 @@ data class ChatCompletion(
         .with(autoBody<ChatCompletion>().toLens() of this)
 
     override fun toResult(response: Response): Result<Sequence<CompletionResponse>, RemoteFailure> =
-        toCompletionSequence(response, OpenAIMoshi, "data: ", "[DONE]")
+        toSseSequence(response, OpenAIMoshi, "[DONE]")
 }
 
 @JsonSerializable

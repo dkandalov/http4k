@@ -11,6 +11,7 @@ import org.http4k.connect.anthropic.AnthropicAI
 import org.http4k.connect.anthropic.ApiVersion
 import org.http4k.connect.anthropic.ApiVersion.Companion._2023_06_01
 import org.http4k.connect.anthropic.Http
+import org.http4k.connect.anthropic.action.Content
 import org.http4k.connect.anthropic.action.MessageCompletion
 import org.http4k.connect.anthropic.action.Metadata
 import org.http4k.core.HttpHandler
@@ -33,7 +34,7 @@ fun Chat.Companion.AnthropicAI(
                 request.params.maxOutputTokens ?: MaxTokens.of(64000),
                 metadata,
                 request.params.stopSequences ?: emptyList(),
-                systemPrompt,
+                systemPrompt?.let { listOf(Content.Text(it.value)) },
                 request.params.temperature,
                 request.params.toolSelection?.toLLM(),
                 request.params.tools.map { it.toAnthropic() },

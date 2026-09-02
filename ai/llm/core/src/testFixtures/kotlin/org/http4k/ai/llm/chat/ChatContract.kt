@@ -15,7 +15,6 @@ import org.http4k.ai.llm.tools.LLMTool
 import org.http4k.ai.llm.util.LLMJson
 import org.http4k.ai.llm.util.LLMJson.convert
 import org.http4k.ai.model.ModelName
-import org.http4k.ai.model.Temperature.Companion.ZERO
 import org.http4k.ai.model.ToolName
 import org.junit.jupiter.api.Test
 
@@ -29,7 +28,7 @@ interface ChatContract {
         val response = chat(
             ChatRequest(
                 "what is 2+2? do not explain, do not use tools, just give the answer as a number only with no whitespace",
-                ModelParams(model, ZERO, responseFormat = Text)
+                ModelParams(model, responseFormat = Text)
             )
         ).orThrow { error(it) }
 
@@ -61,7 +60,7 @@ interface ChatContract {
     @Test
     fun `can generate a tool request`() {
         val params = ModelParams(
-            model, ZERO,
+            model,
             tools = listOf(LLMTool("calculator", "A simple calculator", convert(jsonSchema))),
         )
         val initialRequest = ChatRequest(

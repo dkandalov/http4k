@@ -8,6 +8,14 @@ import org.junit.jupiter.api.Test
 class ChunkedSseSequenceTest {
 
     @Test
+    fun `multi byte utf8 characters survive`() {
+        assertThat(
+            "data: café 😀\n\n".byteInputStream().chunkedSseSequence().toList(),
+            equalTo(listOf<SseMessage>(SseMessage.Data("café 😀")))
+        )
+    }
+
+    @Test
     fun `empty sse stream`() {
         assertThat(
             "".byteInputStream().chunkedSseSequence().toList(),
