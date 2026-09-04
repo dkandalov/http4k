@@ -8,9 +8,12 @@ import com.natpryce.hamkrest.hasElement
 import dev.forkhandles.result4k.valueOrNull
 import dev.forkhandles.values.UUIDValue
 import dev.forkhandles.values.UUIDValueFactory
+import org.http4k.connect.RemoteFailure
 import org.http4k.connect.amazon.AwsContract
+import org.http4k.connect.amazon.dynamodb.action.ConditionalCheckFailed
 import org.http4k.connect.amazon.dynamodb.action.Scan
 import org.http4k.connect.amazon.dynamodb.action.copy
+import org.http4k.connect.amazon.dynamodb.model.AttributeName
 import org.http4k.connect.amazon.dynamodb.model.AttributeValue.Companion.List
 import org.http4k.connect.amazon.dynamodb.model.AttributeValue.Companion.Null
 import org.http4k.connect.amazon.dynamodb.model.AttributeValue.Companion.Num
@@ -23,14 +26,20 @@ import org.http4k.connect.amazon.dynamodb.model.ReqStatement
 import org.http4k.connect.amazon.dynamodb.model.ReqWriteItem
 import org.http4k.connect.amazon.dynamodb.model.ReqWriteItem.Companion.Put
 import org.http4k.connect.amazon.dynamodb.model.ReturnConsumedCapacity.TOTAL
+import org.http4k.connect.amazon.dynamodb.model.ReturnValuesOnConditionCheckFailure.ALL_OLD
 import org.http4k.connect.amazon.dynamodb.model.TableName
+import org.http4k.connect.amazon.dynamodb.model.TimeToLiveSpecification
+import org.http4k.connect.amazon.dynamodb.model.TimeToLiveStatus.DISABLED
 import org.http4k.connect.amazon.dynamodb.model.TransactGetItem.Companion.Get
 import org.http4k.connect.amazon.dynamodb.model.TransactWriteItem.Companion.Delete
 import org.http4k.connect.amazon.dynamodb.model.TransactWriteItem.Companion.Put
 import org.http4k.connect.amazon.dynamodb.model.TransactWriteItem.Companion.Update
+import org.http4k.connect.amazon.dynamodb.model.toItem
 import org.http4k.connect.amazon.dynamodb.model.with
+import org.http4k.connect.failureValue
 import org.http4k.connect.model.Base64Blob
 import org.http4k.connect.successValue
+import org.http4k.core.Status.Companion.BAD_REQUEST
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Disabled
@@ -42,12 +51,23 @@ class MyValueType(value: UUID) : UUIDValue(value) {
     companion object : UUIDValueFactory<MyValueType>(::MyValueType)
 }
 
+/**
+ * DynamoDB reports a failed condition as an error body rather than a typed response, so the item it
+ * returns has to be read back out of that body.
+ */
+private fun RemoteFailure.conditionCheckFailureItem() =
+    DynamoDbMoshi.asA(message!!, ConditionalCheckFailed::class).Item?.toItem()
+
 interface DynamoDbContract : AwsContract {
     val duration: Duration
 
     private val dynamo get() = DynamoDb.Http(aws.region, { aws.credentials }, http)
 
-    val table get() = TableName.sample(suffix = uuid(0).toString())
+    /**
+     * Supplied by the implementation so the name stays stable across [create], the test body and
+     * [after] - the previous `get()` recomputed it on every access.
+     */
+    val table: TableName
 
     @BeforeEach
     fun create() {
@@ -185,6 +205,144 @@ interface DynamoDbContract : AwsContract {
     }
 
     @Test
+    fun `failed put condition returns the current item only when requested`() {
+        with(dynamo) {
+            val stored = createMiniItem("hello", bool = true)
+            putItem(table, stored).successValue()
+
+            // the attempted item differs from the stored one, so the assertions below distinguish
+            // "returns the row which blocked the write" from "echoes back what was sent"
+            val attempted = createMiniItem("hello", bool = false)
+
+            val requested = putItem(
+                table,
+                attempted,
+                ConditionExpression = "attribute_not_exists($attrS)",
+                ReturnValuesOnConditionCheckFailure = ALL_OLD
+            ).failureValue()
+
+            assertThat(requested.status, equalTo(BAD_REQUEST))
+            assertThat(requested.conditionCheckFailureItem(), equalTo(stored))
+
+            val notRequested = putItem(
+                table,
+                attempted,
+                ConditionExpression = "attribute_not_exists($attrS)"
+            ).failureValue()
+
+            assertThat(notRequested.status, equalTo(BAD_REQUEST))
+            assertThat(notRequested.conditionCheckFailureItem(), absent())
+        }
+    }
+
+    @Test
+    fun `failed update condition returns the current item only when requested`() {
+        with(dynamo) {
+            val stored = createMiniItem("hello", bool = true)
+            putItem(table, stored).successValue()
+
+            // the stored item holds theBool = true, so requiring false is the failing condition
+            val requested = updateItem(
+                table,
+                Item(attrS of "hello"),
+                ConditionExpression = "$attrBool = :expected",
+                UpdateExpression = "SET $attrN = :updated",
+                ExpressionAttributeValues = mapOf(
+                    ":expected" to attrBool.asValue(false),
+                    ":updated" to attrN.asValue(99)
+                ),
+                ReturnValuesOnConditionCheckFailure = ALL_OLD
+            ).failureValue()
+
+            assertThat(requested.status, equalTo(BAD_REQUEST))
+            assertThat(requested.conditionCheckFailureItem(), equalTo(stored))
+
+            val notRequested = updateItem(
+                table,
+                Item(attrS of "hello"),
+                ConditionExpression = "$attrBool = :expected",
+                UpdateExpression = "SET $attrN = :updated",
+                ExpressionAttributeValues = mapOf(
+                    ":expected" to attrBool.asValue(false),
+                    ":updated" to attrN.asValue(99)
+                )
+            ).failureValue()
+
+            assertThat(notRequested.status, equalTo(BAD_REQUEST))
+            assertThat(notRequested.conditionCheckFailureItem(), absent())
+
+            // the failed condition must have left the stored record untouched
+            assertThat(getItem(table, Item(attrS of "hello")).successValue().item, equalTo(stored))
+        }
+    }
+
+    @Test
+    fun `failed delete condition returns the current item only when requested`() {
+        with(dynamo) {
+            val stored = createMiniItem("hello", bool = true)
+            putItem(table, stored).successValue()
+
+            val requested = deleteItem(
+                table,
+                Item(attrS of "hello"),
+                ConditionExpression = "$attrBool = :expected",
+                ExpressionAttributeValues = mapOf(":expected" to attrBool.asValue(false)),
+                ReturnValuesOnConditionCheckFailure = ALL_OLD
+            ).failureValue()
+
+            assertThat(requested.status, equalTo(BAD_REQUEST))
+            assertThat(requested.conditionCheckFailureItem(), equalTo(stored))
+
+            val notRequested = deleteItem(
+                table,
+                Item(attrS of "hello"),
+                ConditionExpression = "$attrBool = :expected",
+                ExpressionAttributeValues = mapOf(":expected" to attrBool.asValue(false))
+            ).failureValue()
+
+            assertThat(notRequested.status, equalTo(BAD_REQUEST))
+            assertThat(notRequested.conditionCheckFailureItem(), absent())
+
+            // a condition which cannot hold for a record that is not there fails with nothing to return
+            val onMissing = deleteItem(
+                table,
+                Item(attrS of "ghost"),
+                ConditionExpression = "attribute_exists($attrS)",
+                ReturnValuesOnConditionCheckFailure = ALL_OLD
+            ).failureValue()
+
+            assertThat(onMissing.status, equalTo(BAD_REQUEST))
+            assertThat(onMissing.conditionCheckFailureItem(), absent())
+        }
+    }
+
+    @Test
+    fun `conditional delete applies only when the condition holds`() {
+        with(dynamo) {
+            val stored = createMiniItem("hello", bool = true)
+            putItem(table, stored).successValue()
+
+            deleteItem(
+                table,
+                Item(attrS of "hello"),
+                ConditionExpression = "$attrBool = :expected",
+                ExpressionAttributeValues = mapOf(":expected" to attrBool.asValue(false))
+            ).failureValue()
+
+            assertThat(getItem(table, Item(attrS of "hello")).successValue().item, equalTo(stored))
+
+            deleteItem(
+                table,
+                Item(attrS of "hello"),
+                ConditionExpression = "$attrBool = :expected",
+                ExpressionAttributeValues = mapOf(":expected" to attrBool.asValue(true))
+            ).successValue()
+
+            assertThat(getItem(table, Item(attrS of "hello")).successValue().item, absent())
+        }
+    }
+
+    @Test
     fun `pagination of results`() {
         with(dynamo) {
             putItem(table, createItem("hello")).successValue()
@@ -227,6 +385,38 @@ interface DynamoDbContract : AwsContract {
             )
 
             waitForUpdate()
+        }
+    }
+
+    @Test
+    fun `time to live lifecycle`() {
+        with(dynamo) {
+            // A fresh table has TTL disabled.
+            assertThat(
+                describeTimeToLive(table).successValue().TimeToLiveDescription.TimeToLiveStatus,
+                equalTo(DISABLED)
+            )
+
+            // Enabling echoes the requested specification back.
+            val ttlAttribute = AttributeName.of("expiresAt")
+            val specified = updateTimeToLive(
+                table,
+                TimeToLiveSpecification(Enabled = true, AttributeName = ttlAttribute)
+            ).successValue().TimeToLiveSpecification
+            assertThat(specified.Enabled, equalTo(true))
+            assertThat(specified.AttributeName, equalTo(ttlAttribute))
+
+            waitForUpdate()
+
+            // Describe now names the attribute TTL applies to. (The status may be ENABLING before it
+            // settles on ENABLED against real DynamoDB, so only the attribute is asserted here.) Disabling
+            // is deliberately NOT exercised here: AWS rejects a second UpdateTimeToLive within the (up to
+            // one hour) processing window with a ValidationException, so it belongs in a fake-only test,
+            // not this contract that also runs against real DynamoDB (RealDynamoDbTest).
+            assertThat(
+                describeTimeToLive(table).successValue().TimeToLiveDescription.AttributeName,
+                equalTo(ttlAttribute)
+            )
         }
     }
 

@@ -15,32 +15,44 @@ fun AwsJsonFake.scan(tables: Storage<DynamoTable>) = route<Scan> { scan ->
             "com.amazon.coral.validate#ValidationException",
             "The table does not have the specified index: ${scan.IndexName}"
         )
-    } else table.table.KeySchema
+    } else {
+        table.table.KeySchema
+    }
     val comparator = schema.comparator(true)
+
+    val filterExpression = try {
+        conditionExpression(
+            expression = scan.FilterExpression,
+            expressionAttributeNames = scan.ExpressionAttributeNames,
+            expressionAttributeValues = scan.ExpressionAttributeValues
+        )
+    } catch (e: DynamoDbConditionError) {
+        return@route invalidExpression("FilterExpression", e)
+    }
 
     val matches = table.items
         .asSequence()
-        .filter(schema.filterNullKeys())  // exclude items not held by selected index
-        .sortedWith(comparator)  // sort by selected index
+        .filter(schema.filterNullKeys()) // exclude items not held by selected index
+        .sortedWith(comparator) // sort by selected index
         .dropWhile {
             scan.ExclusiveStartKey != null && comparator.compare(
                 it,
                 scan.ExclusiveStartKey!!
             ) <= 0
-        }   // skip previous pages
+        } // skip previous pages
         .toList()
 
     val page = matches.take((scan.Limit ?: table.maxPageSize).coerceAtMost(table.maxPageSize))
     val filteredPage = try {
         page.mapNotNull {
-            it.condition(
-                expression = scan.FilterExpression,
+            it.takeIfMatches(
+                expression = filterExpression,
                 expressionAttributeNames = scan.ExpressionAttributeNames,
                 expressionAttributeValues = scan.ExpressionAttributeValues
             )
         }
     } catch (e: DynamoDbConditionError) {
-        return@route JsonError("com.amazon.coral.validate#ValidationException", "Invalid FilterExpression: ${e.message}")
+        return@route invalidExpression("FilterExpression", e)
     }
 
     ScanResponse(
@@ -51,6 +63,8 @@ fun AwsJsonFake.scan(tables: Storage<DynamoTable>) = route<Scan> { scan ->
             val indexKey = lastItem?.key(schema)
             val primaryKey = lastItem?.key(table.table.KeySchema!!)
             (indexKey.orEmpty() + primaryKey.orEmpty()).takeIf { it.isNotEmpty() }
-        } else null
+        } else {
+            null
+        }
     )
 }

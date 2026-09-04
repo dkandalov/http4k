@@ -28,8 +28,8 @@ class OpenWhiskFunctionTest {
             ),
             FakeOpenWhiskResponse(
                 200, mapOf(
-                "header" to "hvalue"
-            ),
+                    "header" to "hvalue"
+                ),
                 "/bob?query=qvaluemyBody"
             ),
             NonBinary
@@ -48,8 +48,8 @@ class OpenWhiskFunctionTest {
             ),
             FakeOpenWhiskResponse(
                 200, mapOf(
-                "header" to "hvalue"
-            ),
+                    "header" to "hvalue"
+                ),
                 "L2JvYj9xdWVyeT1xdmFsdWVteUJvZHk="
             ),
             Binary
@@ -68,8 +68,8 @@ class OpenWhiskFunctionTest {
             ),
             FakeOpenWhiskResponse(
                 200, mapOf(
-                "header" to "hvalue"
-            ),
+                    "header" to "hvalue"
+                ),
                 "/bob?query=qvalue� hw"
             ),
             BinaryRequestOnly
@@ -83,6 +83,15 @@ class OpenWhiskFunctionTest {
             FakeOpenWhiskResponse(200, emptyMap(), "P3F1ZXJ5PQ=="),
             BinaryResponseOnly
         )
+    }
+
+    @Test
+    fun `missing __ow_method returns not implemented instead of throwing`() {
+        val function = OpenWhiskFunction({ { _: Request -> Response(OK) } })
+
+        val response = function(Gson.asJsonObject(mapOf("__ow_path" to "/bob")) as JsonObject)
+
+        assertThat(Gson.asA(response, FakeOpenWhiskResponse::class).statusCode, equalTo(501))
     }
 
     private fun assertExpectedResponseIs(

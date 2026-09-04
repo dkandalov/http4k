@@ -8,7 +8,7 @@ import org.http4k.ai.model.ResponseId
 import org.http4k.ai.model.Role
 import org.http4k.ai.model.StopReason
 import org.http4k.ai.model.Temperature
-import org.http4k.ai.util.toCompletionSequence
+import org.http4k.ai.util.toSseSequence
 import org.http4k.connect.Http4kConnectAction
 import org.http4k.connect.lmstudio.LmStudioAction
 import org.http4k.connect.lmstudio.LmStudioMoshi
@@ -48,8 +48,8 @@ data class ChatCompletion(
     val tool_choice: Any? = null,
     val parallel_tool_calls: Boolean? = null,
 ) : LmStudioAction<Sequence<CompletionResponse>> {
-    constructor(model: ModelName, message: Message, max_tokens: MaxTokens, stream: Boolean = true)
-        : this(model, listOf(message), max_tokens, stream)
+    constructor(model: ModelName, message: Message, max_tokens: MaxTokens, stream: Boolean = true) :
+        this(model, listOf(message), max_tokens, stream)
 
     constructor(model: ModelName, messages: List<Message>, max_tokens: MaxTokens, stream: Boolean = true) : this(
         model,
@@ -73,7 +73,7 @@ data class ChatCompletion(
     override fun toRequest() = Request(POST, "/v1/chat/completions")
         .with(autoBody<ChatCompletion>().toLens() of this)
 
-    override fun toResult(response: Response) = toCompletionSequence(response, LmStudioMoshi, "data: ", "[DONE]")
+    override fun toResult(response: Response) = toSseSequence(response, LmStudioMoshi, "[DONE]")
 }
 
 @JsonSerializable

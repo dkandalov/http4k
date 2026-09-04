@@ -15,44 +15,66 @@ fun AwsJsonFake.query(tables: Storage<DynamoTable>) = route<Query> { query ->
             "com.amazon.coral.validate#ValidationException",
             "The table does not have the specified index: ${query.IndexName}"
         )
-    } else table.table.KeySchema
+    } else {
+        table.table.KeySchema
+    }
 
     val comparator = schema.comparator(query.ScanIndexForward ?: true)
+
+    val keyConditionExpression = try {
+        conditionExpression(
+            expression = query.KeyConditionExpression,
+            expressionAttributeNames = query.ExpressionAttributeNames,
+            expressionAttributeValues = query.ExpressionAttributeValues
+        )
+    } catch (e: DynamoDbConditionError) {
+        return@route invalidExpression("KeyConditionExpression", e)
+    }
+
+    val filterExpression = try {
+        conditionExpression(
+            expression = query.FilterExpression,
+            expressionAttributeNames = query.ExpressionAttributeNames,
+            expressionAttributeValues = query.ExpressionAttributeValues
+        )
+    } catch (e: DynamoDbConditionError) {
+        return@route invalidExpression("FilterExpression", e)
+    }
 
     val matches = try {
         table.items
             .asSequence()
             .filter(schema.filterNullKeys()) // exclude items not held by selected index
             .mapNotNull {
-                it.condition(
-                    expression = query.KeyConditionExpression,
+                it.takeIfMatches(
+                    expression = keyConditionExpression,
                     expressionAttributeNames = query.ExpressionAttributeNames,
                     expressionAttributeValues = query.ExpressionAttributeValues
                 )
             }
-            .sortedWith(comparator)  // sort by selected index
+            .sortedWith(comparator) // sort by selected index
             .dropWhile {
                 query.ExclusiveStartKey != null && comparator.compare(
                     it,
                     query.ExclusiveStartKey!!
                 ) <= 0
-            }  // skip previous pages
+            } // skip previous pages
             .toList()
     } catch (e: DynamoDbConditionError) {
-        return@route JsonError("com.amazon.coral.validate#ValidationException", "Invalid KeyConditionExpression: ${e.message}")
+        return@route invalidExpression("KeyConditionExpression", e)
     }
 
     val page = matches.take((query.Limit ?: table.maxPageSize).coerceAtMost(table.maxPageSize))
     val filteredPage = try {
         page.mapNotNull {
-            it.condition(
-                expression = query.FilterExpression,
+            it.takeIfMatches(
+                expression = filterExpression,
                 expressionAttributeNames = query.ExpressionAttributeNames,
                 expressionAttributeValues = query.ExpressionAttributeValues
             )
         }
     } catch (e: DynamoDbConditionError) {
-        return@route JsonError("com.amazon.coral.validate#ValidationException", "Invalid FilterExpression: ${e.message}")
+        return@route invalidExpression("FilterExpression", e)
     }
 
     QueryResponse(

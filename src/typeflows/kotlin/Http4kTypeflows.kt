@@ -1,5 +1,6 @@
 @file:Suppress("unused")
 
+import io.typeflows.codeowners.CodeOwners
 import io.typeflows.fs.MarkdownContent
 import io.typeflows.fs.TextContent
 import io.typeflows.github.DotGitHub
@@ -16,16 +17,31 @@ import workflows.BroadcastRelease
 import workflows.Build
 import workflows.CreateGithubRelease
 import workflows.CreateUpgradeBranches
+import workflows.Dco
+import workflows.OssfScorecard
+import workflows.PublishArtifacts
 import workflows.ReleaseApi
+import workflows.SecurityCodeql
 import workflows.SecurityDependabot
 import workflows.SendToSlack
 import workflows.ShutdownTests
-import workflows.UploadRelease
 
 class Http4kTypeflows : Builder<TypeflowsGitHubRepo> {
     override fun build() = TypeflowsGitHubRepo {
         dotGithub = DotGitHub {
+            codeOwners = CodeOwners {
+                owners += mapOf(
+                    "/.github/" to "@http4k/core-maintainers",
+                    "/bin/" to "@http4k/core-maintainers",
+                    "/gradle/" to "@http4k/core-maintainers",
+                    "/src/typeflows/" to "@http4k/core-maintainers",
+                    "build.gradle.kts" to "@http4k/core-maintainers",
+                    "/settings.gradle.kts" to "@http4k/core-maintainers",
+                )
+            }
+
             workflows += Build()
+            workflows += Dco()
             workflows += BroadcastRelease()
             workflows += CreateGithubRelease()
             workflows += CreateUpgradeBranches()
@@ -43,12 +59,24 @@ class Http4kTypeflows : Builder<TypeflowsGitHubRepo> {
             workflows += ReleaseApi()
             workflows += SendToSlack()
             workflows += ShutdownTests()
-            workflows += UploadRelease()
+            workflows += PublishArtifacts()
 
             workflows += SecurityDependabot()
 
-            files += MarkdownContent.of("<!-- Love http4k? Please consider sponsoring the project: \uD83D\uDC49  https://github.com/sponsors/http4k -->")
+            workflows += SecurityCodeql()
+
+            workflows += OssfScorecard()
+
+            files += MarkdownContent.of(SPONSOR_BANNER)
                 .asTypeflowsFile("ISSUE_TEMPLATE.md")
+
+            files += MarkdownContent.of(
+                """
+                $SPONSOR_BANNER
+
+                - [ ] I have signed off all my commits (`git commit -s`) - see [CONTRIBUTING.md](../CONTRIBUTING.md#developer-certificate-of-origin-dco)
+                """.trimIndent()
+            ).asTypeflowsFile("pull_request_template.md")
 
             files += TextContent.of("automerge: [auto/*]").asTypeflowsFile("pr-labeler.yml")
 
@@ -58,3 +86,6 @@ class Http4kTypeflows : Builder<TypeflowsGitHubRepo> {
         files += Http4kProjectStandards()
     }
 }
+
+private const val SPONSOR_BANNER =
+    "<!-- Love http4k? Please consider sponsoring the project: \uD83D\uDC49  https://github.com/sponsors/http4k -->"

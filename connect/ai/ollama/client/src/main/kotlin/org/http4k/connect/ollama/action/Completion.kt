@@ -3,7 +3,7 @@ package org.http4k.connect.ollama.action
 import org.http4k.ai.model.ModelName
 import org.http4k.ai.model.SystemPrompt
 import org.http4k.ai.model.UserPrompt
-import org.http4k.ai.util.toCompletionSequence
+import org.http4k.ai.util.toJsonLinesSequence
 import org.http4k.connect.Http4kConnectAction
 import org.http4k.connect.model.Base64Blob
 import org.http4k.connect.ollama.OllamaAction
@@ -36,7 +36,7 @@ data class Completion(
     override fun toRequest() = Request(POST, "/api/generate")
         .with(autoBody<Completion>().toLens() of this)
 
-    override fun toResult(response: Response) = toCompletionSequence(response, OllamaMoshi, "", "__FAKE_HTTP4k_STOP_SIGNAL__")
+    override fun toResult(response: Response) = toJsonLinesSequence(response, OllamaMoshi)
 }
 
 @JsonSerializable

@@ -24,7 +24,7 @@ data class SendMessage(
     @Json(name = "MessageGroupId") val messageGroupId: String? = null,
     @Json(name = "MessageAttributes") val messageAttributes: Map<String, MessageFieldsDto>? = null,
     @Json(name = "MessageSystemAttributes") val messageSystemAttributes: Map<String, MessageFieldsDto>? = null
-) : SQSAction<SentMessage, SentMessage>("SendMessage", SentMessage::class, { it} ),
+) : SQSAction<SentMessage, SentMessage>("SendMessage", SentMessage::class, { it }),
     Action<Result4k<SentMessage, RemoteFailure>> {
     constructor(
         queueUrl: Uri,
@@ -35,7 +35,7 @@ data class SendMessage(
         expires: ZonedDateTime? = null,
         attributes: List<MessageAttribute>? = null,
         systemAttributes: List<MessageSystemAttribute>? = null
-    ): this(
+    ) : this(
         queueUrl = queueUrl,
         messageBody = payload,
         delaySeconds = delaySeconds,
@@ -51,5 +51,14 @@ data class SentMessage(
     val MD5OfMessageBody: String,
     val MessageId: SQSMessageId,
     val MD5OfMessageAttributes: String? = null,
-    val SequenceNumber: String? = null
-)
+    val SequenceNumber: String? = null,
+    val MD5OfMessageSystemAttributes: String? = null
+) {
+    @Deprecated("Retained for binary compatibility", level = DeprecationLevel.HIDDEN)
+    constructor(
+        MD5OfMessageBody: String,
+        MessageId: SQSMessageId,
+        MD5OfMessageAttributes: String?,
+        SequenceNumber: String?
+    ) : this(MD5OfMessageBody, MessageId, MD5OfMessageAttributes, SequenceNumber, null)
+}

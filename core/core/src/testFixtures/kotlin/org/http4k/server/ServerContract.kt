@@ -95,6 +95,7 @@ abstract class ServerContract(
                 }
             },
             "/uri" bind GET to { Response(OK).body(it.uri.toString()) },
+            "/encoded/{encoded}" bind GET to { Response(OK).body(it.uri.path) },
             "/version" bind GET to { Response(OK).body(it.version) },
             "/multiple-headers" bind GET to { Response(OK).header("foo", "value1").header("foo", "value2") },
             "/boom" bind GET to { throw IllegalArgumentException("BOOM!") },
@@ -124,12 +125,14 @@ abstract class ServerContract(
     @Test
     fun `can call an endpoint with all supported Methods`() {
         for (method in requiredMethods) {
-
             val response = client(Request(method, baseUrl + "/" + method.name))
 
             assertThat(response.status, equalTo(OK))
-            if (method == Method.HEAD) assertThat(response.body, equalTo(Body.EMPTY))
-            else assertThat(response.bodyString(), equalTo(method.name))
+            if (method == Method.HEAD) {
+                assertThat(response.body, equalTo(Body.EMPTY))
+            } else {
+                assertThat(response.bodyString(), equalTo(method.name))
+            }
         }
     }
 
@@ -253,6 +256,14 @@ abstract class ServerContract(
 
         assertThat(response.status, equalTo(OK))
         assertThat(response.bodyString(), equalTo("/uri?bob=bill"))
+    }
+
+    @Test
+    open fun `does not double-decode percent-encoded path segments`() {
+        val response = client(Request(GET, "$baseUrl/encoded/a%20b"))
+
+        assertThat(response.status, equalTo(OK))
+        assertThat(response.bodyString(), equalTo("/encoded/a%20b"))
     }
 
     @Test

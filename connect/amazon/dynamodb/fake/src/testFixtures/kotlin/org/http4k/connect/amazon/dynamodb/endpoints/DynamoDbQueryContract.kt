@@ -2,14 +2,14 @@ package org.http4k.connect.amazon.dynamodb.endpoints
 
 import com.natpryce.hamkrest.absent
 import com.natpryce.hamkrest.assertion.assertThat
+import com.natpryce.hamkrest.containsSubstring
 import com.natpryce.hamkrest.equalTo
 import com.natpryce.hamkrest.lessThan
 import com.natpryce.hamkrest.present
 import dev.forkhandles.result4k.Failure
+import dev.forkhandles.result4k.failureOrNull
 import org.http4k.connect.RemoteFailure
 import org.http4k.connect.amazon.dynamodb.DynamoDbSource
-import org.http4k.connect.amazon.dynamodb.FakeDynamoDbSource
-import org.http4k.connect.amazon.dynamodb.LocalDynamoDbSource
 import org.http4k.connect.amazon.dynamodb.attrB
 import org.http4k.connect.amazon.dynamodb.attrBool
 import org.http4k.connect.amazon.dynamodb.attrN
@@ -107,6 +107,35 @@ abstract class DynamoDbQueryContract : DynamoDbSource {
 
         assertThat(result.Count, equalTo(0))
         assertThat(result.items, equalTo(emptyList()))
+    }
+
+    /**
+     * The expressions are checked against the substitutions before any item is looked at, so an undefined
+     * `:value` is reported even when there is nothing to evaluate it against. Only the status and the
+     * error type are pinned here: the wording of the message is not part of the contract.
+     */
+    @Test
+    fun `query validates key condition expression on empty table`() {
+        val failure = dynamo.query(
+            TableName = table,
+            KeyConditionExpression = "$attrS = :missing"
+        ).failureOrNull()
+
+        assertThat(failure?.status, equalTo(Status.BAD_REQUEST))
+        assertThat(failure?.message, present(containsSubstring("ValidationException")))
+    }
+
+    @Test
+    fun `query validates filter expression on empty table`() {
+        val failure = dynamo.query(
+            TableName = table,
+            KeyConditionExpression = "$attrS = :val1",
+            FilterExpression = "$attrN = :missing",
+            ExpressionAttributeValues = mapOf(":val1" to attrS.asValue("hash1"))
+        ).failureOrNull()
+
+        assertThat(failure?.status, equalTo(Status.BAD_REQUEST))
+        assertThat(failure?.message, present(containsSubstring("ValidationException")))
     }
 
     @Test
@@ -468,10 +497,10 @@ abstract class DynamoDbQueryContract : DynamoDbSource {
         val id2 = UUID.randomUUID()
         val id3 = UUID.randomUUID()
 
-        val item1 = Item(idAttr of id1, dobAttr of dob1, nameAttr of "name1").also { dynamo.putItem(table,it) }
-        val item2 = Item(idAttr of id2, dobAttr of dob1, nameAttr of "name2").also { dynamo.putItem(table,it) }
-        val item3 = Item(idAttr of id3, dobAttr of dob1, nameAttr of "name3").also { dynamo.putItem(table,it) }
-        Item(idAttr of UUID.randomUUID(), dobAttr of dob2, nameAttr of "name4").also { dynamo.putItem(table,it) }
+        val item1 = Item(idAttr of id1, dobAttr of dob1, nameAttr of "name1").also { dynamo.putItem(table, it) }
+        val item2 = Item(idAttr of id2, dobAttr of dob1, nameAttr of "name2").also { dynamo.putItem(table, it) }
+        val item3 = Item(idAttr of id3, dobAttr of dob1, nameAttr of "name3").also { dynamo.putItem(table, it) }
+        Item(idAttr of UUID.randomUUID(), dobAttr of dob2, nameAttr of "name4").also { dynamo.putItem(table, it) }
 
         val page1 = dynamo.query(
             TableName = table,
@@ -594,7 +623,3 @@ abstract class DynamoDbQueryContract : DynamoDbSource {
         ))))
     }
 }
-
-
-class FakeDynamoDbQueryTest : DynamoDbQueryContract(), DynamoDbSource by FakeDynamoDbSource()
-class LocalDynamoDbQueryTest : DynamoDbQueryContract(), DynamoDbSource by LocalDynamoDbSource()

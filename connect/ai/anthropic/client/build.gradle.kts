@@ -8,6 +8,7 @@ plugins {
 
 dependencies {
     api(project(":http4k-ai-core"))
+    api(project(":http4k-multipart"))
 
     api(libs.kotshi.api)
 

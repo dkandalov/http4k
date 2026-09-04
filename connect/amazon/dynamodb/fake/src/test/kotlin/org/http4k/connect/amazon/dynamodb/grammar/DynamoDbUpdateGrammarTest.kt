@@ -1,6 +1,5 @@
 package org.http4k.connect.amazon.dynamodb.grammar
 
-
 import com.natpryce.hamkrest.assertion.assertThat
 import com.natpryce.hamkrest.equalTo
 import org.http4k.connect.amazon.dynamodb.attrBool
@@ -28,6 +27,21 @@ class DynamoDbUpdateGrammarTest {
         expression = "REMOVE $attrN",
         item = Item(attrS of "a"),
         expected = Item(attrS of "a")
+    )
+
+    @Test
+    fun `remove - multiple, comma separated`() = assert(
+        expression = "REMOVE $attrN, $attrS",
+        item = Item(attrS of "a", attrN of 1, attrBool of true),
+        expected = Item(attrBool of true)
+    )
+
+    @Test
+    fun `remove - multiple named, comma separated`() = assert(
+        expression = "REMOVE #key1, #key2",
+        item = Item(attrS of "a", attrN of 1, attrBool of true),
+        expected = Item(attrBool of true),
+        names = mapOf("#key1" to attrN.name, "#key2" to attrS.name)
     )
 
     @Test

@@ -44,7 +44,7 @@ class JSoupWebElementTest {
             <input id="checkbox" name="uncheckedCheckbox" type="checkbox" value="uncheckedCheckbox"/>
             <input id="radio" name="radio" type="radio" value="checkedRadio" checked/>
             <input id="radio" name="radio" type="radio" value="uncheckedRadio"/>
-            <textarea id="textarea" value="bob"/>
+            <textarea id="textarea" value="bob"></textarea>
             <p>inner</p>
         </form>
         """)).findElement(By.tagName("form"))
@@ -160,7 +160,7 @@ class JSoupWebElementTest {
 
         val username = "username"
         val password = "password"
-        val getURL: () -> String? = { "http://${username}:${password}@example.org" }
+        val getURL: () -> String? = { "http://$username:$password@example.org" }
 
         val form = JSoupWebElement(navigate, getURL, Jsoup.parse("""
             <form method="POST" action="/action">

@@ -6,9 +6,11 @@ flowchart LR
     pullrequest(["🔀 pull_request"])
     schedule(["⏰ schedule"])
     workflowdispatch(["👤 workflow_dispatch"])
+    branchprotectionrule(["🔔 branchprotectionrule"])
     repositorydispatchgithubrepository(["🔔 repository_dispatch<br/>→ this repo"])
     repositorydispatchmatrixrepo(["🔔 repository_dispatch<br/>→ ${{ matrix.repo }}"])
     buildhttp4kyml["Build"]
+    dcoyml["DCO"]
     broadcastreleaseyml["Broadcast Release"]
     newreleasegithubyml["New Release - GitHub"]
     newreleaseupgradebranchesyml["New Release - Update other projects"]
@@ -18,17 +20,27 @@ flowchart LR
     shutdowntestsyml["Server Shutdown Tests"]
     publishartifactsyml["Publish Artifacts"]
     securitydependabotyml["Security - Dependency Analysis (dependabot)"]
+    securitycodeqlyml["Security - Vulnerability Scanning (CodeQL)"]
+    ossfscorecardyml["OSSF scorecard"]
     push -->|"branches(only: 1), paths(ignore: 1)"|buildhttp4kyml
     push -->|"branches(only: 1), paths(ignore: 1)"|shutdowntestsyml
     push -->|"tags(only: 1)"|publishartifactsyml
     push -->|"branches(only: 1), paths(ignore: 1)"|securitydependabotyml
+    push -->|"branches(only: 1), paths(ignore: 1)"|securitycodeqlyml
+    push -->|"branches(only: 1)"|ossfscorecardyml
     pullrequest -->|"(*), branches(ignore: 1), paths(ignore: 1)"|buildhttp4kyml
+    pullrequest -->|"(opened, synchronize, reopened)"|dcoyml
+    pullrequest -->|"(*), paths(ignore: 1)"|securitycodeqlyml
     schedule -->|"0 * * * *"|broadcastreleaseyml
     schedule -->|"0 8 * * 1"|updatedependenciesyml
     schedule -->|"0 12 * * 3"|securitydependabotyml
+    schedule -->|"0 12 * * 3"|securitycodeqlyml
+    schedule -->|"0 8 * * 1"|ossfscorecardyml
     workflowdispatch --> broadcastreleaseyml
     workflowdispatch --> updatedependenciesyml
     workflowdispatch -->|"inputs: version"|releaseapiyml
+    workflowdispatch --> ossfscorecardyml
+    branchprotectionrule --> ossfscorecardyml
     broadcastreleaseyml --> repositorydispatchgithubrepository
     repositorydispatchgithubrepository -->|"http4k-release"|newreleasegithubyml
     repositorydispatchgithubrepository -->|"http4k-release"|newreleaseupgradebranchesyml
@@ -41,11 +53,14 @@ flowchart LR
 
 - [Broadcast Release](./broadcast-release/)
 - [Build](./build-http4k/)
+- [DCO](./dco/)
 - [New Release - GitHub](./new-release-github/)
 - [New Release - Slack](./new-release-slack/)
 - [New Release - Update other projects](./new-release-upgrade-branches/)
+- [OSSF scorecard](./ossf-scorecard/)
 - [Publish Artifacts](./publish-artifacts/)
 - [Release API](./release-api/)
 - [Security - Dependency Analysis (dependabot)](./security-dependabot/)
+- [Security - Vulnerability Scanning (CodeQL)](./security_codeql/)
 - [Server Shutdown Tests](./shutdown-tests/)
 - [Update Dependencies](./update-dependencies/)

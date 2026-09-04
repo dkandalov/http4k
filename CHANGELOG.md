@@ -5,9 +5,93 @@ changes with their rationale when appropriate.
 
 Given version `A.B.C.D`, breaking changes are to be expected in version number increments where changes in the `A` or `B` sections. Note that breaking changes could be via direct code or indirectly via dependencies.
 
-### v6.55.0.0 (uncut)
+> **Distribution notice** - from 1 October 2026, Maven Central receives http4k releases approximately quarterly. [maven.http4k.org](https://maven.http4k.org) continues on the normal 1-2 week cadence. Both channels are supported. Background and current status: **[DISTRIBUTION.md](https://www.http4k.org/distribution/)**
+
+### v6.59.0.0 (uncut)
+- **http4k-***: Upgrade versions & Gradle
+- **http4k-web-htmx**: [Break] Upgrade to HTMX 4.0.0 so webjars will have changed URL and version we are shipping. If you're not on HTMX 4 then expect breaks.
+- **http4k-connect-ai-anthropic-***: [Break] The Messages API model is much more complete, so a few things move. In rough order of how likely you are to hit them:
+  - Handling response content: `Content` has many more arms plus an `Unknown`.
+  - Setting a system prompt: `system` is a `List<Content.Text>` rather than a `SystemPrompt`.
+  - Using tools: `Tool(name, description, schema)` becomes `Tool.User(name, schema, description)`, and `ToolResult.content` is a `List<Content>` rather than `Any`.
+  - Sending images: `Source(data, mediaType)` becomes `Source.Base64(data, mediaType)`.
+  - Streaming: `MessageGenerationEvent` gains `StopMessage` at the end of the stream and an `Unknown` arm, and `Error` carries `ErrorDetail(type, message)`.
+- **http4k-connect-ai-anthropic-***: [Fix] `temperature`, `top_k` and `top_p` only sent when set. Opus 4.7+, preventing request failure.
+- **http4k-ai-llm-anthropic**: [Fix] Claude 5 models return a `Thinking` block by default, which the chat shim rejected.
+- **http4k-connect-ai-anthropic-fake**: [Fix] Streamed responses emit a complete event sequence.
+- **http4k-ai-core**: [Break] `toCompletionSequence` is replaced by `toSseSequence` and `toJsonLinesSequence`.
+
+### v6.58.1.0
+- **http4k-***: Upgrade versions & Gradle
+- **http4k-template-kotlinx-html**: [New module!] Renders `kotlinx-html` DSL views as http4k `TemplateRenderer`s.
+
+### v6.58.0.0
+- **http4k-***: Upgrade versions, including Swagger UI upgrade (path change)
+- **http4k-serverless-tencent**: [Possible break] Removed the dependency on `com.tencentcloudapi:scf-java-events`, which has been abandoned since its last release in June 2021 and has no replacement artifact. Vendored dependent classes. The module has no third-party runtime dependencies at all.
+- **http4k-format-fory**: [New module!] Support for Apache Fory binary serializationn.
+- **http4k-connect-amazon-dynamodb-fake**: [Fix] `REMOVE #a, #b` now parses. Targets could previously only be separated by whitespace, so an update removing two attributes failed.
+- **http4k-connect-amazon-route53-fake** - Escape wildcard characters in record name. H/T @youdie006
+
+### v6.57.2.0
+- **http4k-***: Upgrade versions
+- **http4k-connect-amazon-iot**: [New module!] AWS IoT Core control plane, covering the Jobs operations (`CreateJob`, `DescribeJob`, `DescribeJobExecution`, `ListJobExecutionsForThing`, `CancelJob`, `DeleteJob`), the stream operations devices pull files over MQTT from (`CreateStream`, `DescribeStream`, `ListStreams`, `UpdateStream`, `DeleteStream`) and `DescribeEndpoint`.
+- **http4k-connect-amazon-iot-fake**: [New module!] AWS IoT Core control plane fake, backed by a `Storage<StoredJob>` and a `Storage<StoredStream>`.
+- **http4k-connect-amazon-iotjobsdataplane**: [New module!] AWS IoT Jobs Data Plane client - the device side of Jobs - supporting `GetPendingJobExecutions`, `DescribeJobExecution` (including `$next`), `StartNextPendingJobExecution` and `UpdateJobExecution`. It signs as `iot-jobs-data` against the account's `data.jobs.iot.<region>.amazonaws.com` endpoint.
+- **http4k-connect-amazon-iotjobsdataplane-fake**: [New module!] AWS IoT Jobs Data Plane fake. Takes the same `Storage<StoredJob>` as `FakeIot`, so one store passed to both gives the control plane and the device API a single jobs state.
+- **http4k-connect-amazon-dynamodb**: [Fix] `ConditionalCheckFailed.Message` is now read from the `message` field DynamoDB actually sends (lower-cased, as on its other error bodies), so deserialising a real conditional-write failure no longer throws instead of returning the `Item` the caller asked for. DynamoDB Local spells it `Message`, so both are accepted. The property keeps its name, so existing callers compile; the fake now emits the same spelling as AWS.
+- **http4k-connect-amazon-sqs**: `SQSMessage` gains `systemAttributes` (the `Attributes` map SQS reports on a received message); `SentMessage` and `SendMessageBatchResultEntry` gain the previously-dropped `MD5OfMessageSystemAttributes`; `ReceiveMessage` gains `MessageSystemAttributeNames`, the selector which supersedes the deprecated `AttributeNames`. The attribute names SQS uses are available as `MessageSystemAttributeName`, and `MessageFieldsDto.toSqs()` is now public so the checksums can be computed outside the module. All new fields are defaulted, and each type keeps its previous primary constructor as a secondary, so existing bytecode still links (only the synthetic `copy` of a `data class` unavoidably changes shape).
+- **http4k-connect-amazon-sqs-fake**: [Fix] A send no longer drops its FIFO fields: `MessageGroupId`, `MessageDeduplicationId` and `MessageSystemAttributes` are recorded alongside the `SenderId`, `SentTimestamp` and (on a `.fifo` queue) `SequenceNumber` SQS itself populates, and `ReceiveMessage` reports them in `Attributes`, honouring the request's selection. A `.fifo` queue now deduplicates as SQS does: repeating a `MessageDeduplicationId` within 5 minutes of the accepted send succeeds and reports the original `MessageId`/`SequenceNumber` without enqueueing again - but with the checksums of the request just received, since SQS digests what it was sent even when it deduplicates it away. `FakeSQS` gains defaulted `deduplication`, `queueConfig` and `clock` constructor parameters.
+- **http4k-connect-amazon-dynamodb-fake**: [Fix] `attribute_type(#a, :t)` - the only form real DynamoDB accepts, with the type passed as an expression attribute value - now parses, resolved through the request's `ExpressionAttributeValues`. It previously failed to parse (escaping as a 500 on `UpdateItem`), so conditions written for the real service could not run against the fake. The bare-name form (`attribute_type(a, S)`), which the fake has always accepted and real DynamoDB rejects, still parses.
+- **http4k-connect-amazon-dynamodb-fake**: [Fix] An expression naming an undefined `#name` or `:value` (or a malformed `attribute_type` operand) is now reported as the 400 `ValidationException` the real service answers with, instead of escaping as a 500 - by the conditional writes (`PutItem`/`UpdateItem`/`DeleteItem`/`TransactWriteItems`) as well as `Scan`/`Query`. As at DynamoDB it is a *request* error, checked before the expression is evaluated, so `AND`/`OR` short-circuiting cannot hide it - and it stays distinct from the `ConditionalCheckFailedException` a condition which resolved and came out false still produces.
+- **http4k-connect-amazon-dynamodb-fake**: [Fix] `PutItem`, `UpdateItem`, `DeleteItem` and `BatchWriteItem` now serialise their read-modify-write on the table storage - the monitor `TransactWriteItems` already synchronises on - so two concurrent writes to the same table can no longer both read the pre-write table and have the loser overwrite the winner.
+- **http4k-connect-amazon-cognito**: Added `AdminSetUserMFAPreference` and `SetUserMFAPreference` actions (with `SMSMfaSettingsType`/`SoftwareTokenMfaSettingsType`/`EmailMfaSettingsType`/`WebAuthnMfaSettingsType` models), so a user's MFA factors can be enabled and a preferred factor chosen. The fake supports both.
+
+### v6.57.1.0
+- **http4k-***: Republish 6.57.0.0 due to broken release
+
+### v6.57.0.0
+- **http4k-***: Upgrade versions
+- **http4k-server-undertow***: [Unlikely break] SSE now falls back to HTTP handler if the request is not handled.
+- **http4k-connect-amazon-dynamodb**: [Unlikely Break] `DynamoDbContract.table` (testFixtures) is now an abstract property supplied by the implementing test, instead of a `get()` which recomputed `TableName.sample(suffix = uuid(0))` on every access: against an implementation whose `uuid()` is random (`RealAwsContract`), `create()` made one table and the test bodies then addressed a different, non-existent one. `LocalDynamoTest` had already had to override it to work around this; implementations that relied on the default now supply a fixed name.
+- **http4k-connect-amazon-iotdataplane**: [New module!] AWS IoT Core Data Plane client supporting Publish, GetThingShadow, UpdateThingShadow, DeleteThingShadow, ListNamedShadowsForThing, GetRetainedMessage, ListRetainedMessages and DeleteConnection.
+- **http4k-connect-amazon-iotdataplane-fake**: [New module!] AWS IoT Core Data Plane fake which records published messages for test assertions, stores Thing Shadows, and serves the retained messages that its retained publishes create.
+- **http4k-api-jsonschema***: Ability to chain schema model namer. H/T @potfur
+- **http4k-connect-amazon-dynamodb**: Added `DescribeTimeToLive` and `UpdateTimeToLive` actions (with `TimeToLiveStatus`/`TimeToLiveDescription`/`TimeToLiveSpecification` models), so callers can read and set a table's TTL configuration. The fake supports both.
+- **http4k-connect-amazon-cognito**: Support for the `USER_AUTH` choice-based sign-in flow: `AuthFlow` gains `USER_AUTH`, `ExplicitAuthFlow` gains `ALLOW_USER_AUTH`, and `AuthInitiated` gains the `AvailableChallenges` list Cognito returns when the user can choose a sign-in method.
+
+### v6.56.0.0
+- **http4k-***: Upgrade versions
+- **http4k-testing-webdriver-datastar**: [Break] Datastar attributes now use the 1.0 colon separator (e.g. `data-on:click`, `data-bind:foo`, `data-computed:total`) instead of the removed 0.x hyphen form.
+- **http4k-connect-amazon-dynamodb-fake**: [Unlikely Break] `UpdateResult.ConditionFailed` is now a `data class` carrying the item to report back, rather than a `data object`.
+- **http4k-multipart**: [Fix] MultipartFormBody cannot be constructed on read-only filesystems.
+- **http4k-connect-amazon-dynamodb-fake**: [Fix] A conditional `DeleteItem` is now evaluated. The `ConditionExpression` was previously ignored outright, so a guarded delete always succeeded against the fake - including inside `transactWriteItems`, where a failing condition now correctly cancels the transaction.
+- **http4k-connect-amazon-dynamodb-fake**: [Fix] Fake DynamoDB attribute_exists condition for missing item will always succeed for key
+- **http4k-connect-amazon-dynamodb**: `PutItem`, `UpdateItem` and `DeleteItem` gain `ReturnValuesOnConditionCheckFailure`, so a failed conditional write can return the record which blocked it (DynamoDB reports it in the error body). The enum and `TransactWriteItem`'s support for it already existed.
+- **http4k-api-openapi**: add support for a JSON schema dialect selector in swagger ui.  H/T @dzappold
+- **http4k-platform-k8s**: add k8s server extension for PolyHandler. H/T @dzappold
+- **http4k-testing-webdriver** - Specify locator name for a better debugging experience H/T @tamj0rd2
+
+### v6.55.0.0
 - **http4k-***: Upgrade versions including Toon to v2.0.0
+- **http4k-server-undertow**: [Unlikely Break] The request URI is now built from Undertow's raw request target instead of the already-decoded `getRelativePath()`
+- **http4k-server-apache**: [Unlikely Break] The request path and query are now built from the raw request-target.
+- **http4k-client-jetty**: [Fix] A request carrying both a body and an explicit `Content-Length` header no longer produces a duplicate `Content-Length` on the outgoing request.
+- **http4k-multipart**: [Unlikely Break] Nested `multipart/mixed` parts are now rejected with a `ParseError` instead of being parsed recursively, bounding parser stack usage on crafted inputs. The unbounded 3-argument `StreamingMultipartFormParts.parse` overload now applies a default 10MB stream-length cap.
+- **http4k-core**: [Unlikely Break] Cookie values are now percent-encoded on serialization so `;`, `,` and control characters can no longer be interpreted as additional cookie attributes; the same characters are stripped from `Domain`/`Path` attributes. Existing quoting of normal values is unchanged.
+- **http4k-core**: [Unlikely Break] `DefaultCookieStorage` now only accepts a `Set-Cookie` `Domain` that domain-matches the origin host, and rejects dotless public-suffix domains (e.g. `com`), so a response from one host can no longer plant cookies scoped to another. Host-only and exact-host cookies (e.g. `localhost`, `example.co.uk`) are unaffected.
+- **http4k-realtime-core**/**http4k-ai-mcp-sdk**: [Unlikely Break] The HTTP transport now enforces DNS-rebind protection via the new `ServerFilters.HttpRebindProtection`.
+- **http4k-connect-mpp**/**http4k-ai-mcp-mpp**: [Break] `MppVerifier.verify` now receives the server-issued `Challenge` alongside the `Credential`, so verifiers can bind the payment to the challenge the server issued (checking `id`/`opaque`, `expires` and single-use), closing a bypass/replay gap. The HTTP, MCP and tool filters now reject a credential whose payment fields (`realm`/`method`/`intent`/`request`) don't match an offered challenge, before invoking the verifier. A malformed `Authorization: Payment` header now returns a `402` `malformed-credential` problem instead of a `500`.
+- **http4k-security-webauthn**: [Unlikely Break] `Passkeys.passwordless(...)` now defaults to `userVerification = REQUIRED`.
+- **http4k-core**: Hardened docs: extracted path parameters are percent-decoded and may contain `/`, `\` or `..`, so should be treated as untrusted; clearer warnings on the deliberately-loose `ReverseProxyHostMatcher.Contains` and on `CorsPolicy.UnsafeGlobalPermissive`.
 - **http4k-api-ui-swagger-**: [Fix] OAuth URI is not quoted properly
+- **http4k-core**: [Fix] `Body.webForm`/form parsing no longer truncates field values containing `=` (e.g. base64 padding); the value is now preserved intact.
+- **http4k-serverless-lambda**: [Fix] The API Gateway V1 and Application Load Balancer adapters now merge multi-value headers/query params.
+- **http4k-serverless-lambda**: [Fix] A request that fails to parse no longer reflects the exception message into the `BAD_REQUEST` response body.
+- **http4k-serverless-tencent**: [Fix] Requests with no query parameters no longer NPE.
+- **http4k-serverless-openwhisk**: [Fix] An event missing `__ow_method` now returns `NOT_IMPLEMENTED` instead of throwing an NPE.
+- **http4k-connect-x402**/**http4k-ai-mcp-x402**: The payment filters (HTTP + MCP) gain an optional `resourceFor` lambda; when supplied, a payment is rejected with `402` unless `payload.resource` matches, so a payment signed for one resource can't be replayed against another. Off by default (standard behaviour unchanged).
+- **http4k-template-pug4j**: The file-backed `Caching` renderer now applies the same canonical-path containment check as `HotReload`, rejecting template paths that escape the base directory.
+- **http4k-core**: `URLConnectionHttpClient` now accepts a `BodyMode` (defaulting to `Memory`), allowing responses to be streamed rather than always buffered fully into memory.
 - **http4k-security-webauthn**: Minor hardening and robustness improvements to passkey verification
 
 ### v6.54.0.0

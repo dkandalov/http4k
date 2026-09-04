@@ -32,23 +32,27 @@ fun changeResourceRecordSets(
 
     for (change in changes) {
         val record = change.resourceRecordSet.copy(
-            name = change.resourceRecordSet.name.trimEnd('.').plus('.')
+            // Accept both '*' and its Route53 octal escape "\052" for the
+            // wildcard, storing a single canonical form. (#1479)
+            name = change.resourceRecordSet.name.trimEnd('.').plus('.').replace("\\052", "*")
         )
         val key = "${record.type}:${record.name}"
         val exists = key in resources.keySet()
         val matches = record.name.endsWith(hostedZone.name.value)
 
-        when(change.action) {
+        when (change.action) {
             // TODO handle particulars of what makes a valid CNAME, A, alias, etc.
             Change.Action.CREATE -> {
                 if (!matches) return@fn invalidChangeBatch("[RRSet with DNS name ${record.name} is not permitted in zone ${hostedZone.name}]")
                 if (exists) return@fn invalidChangeBatch("[Tried to create resource record set [name='${record.name}', type='${record.type}'] but it already exists]")
                 resources[key] = record
             }
+
             Change.Action.UPSERT -> {
                 if (!matches) return@fn invalidChangeBatch("[RRSet with DNS name ${record.name} is not permitted in zone ${hostedZone.name}]")
                 resources[key] = record
             }
+
             Change.Action.DELETE -> {
                 if (!exists) return@fn invalidChangeBatch("[Tried to delete resource record set [name='${record.name}', type='${record.type}'] but it was not found]")
                 resources -= key

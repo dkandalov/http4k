@@ -1,39 +1,28 @@
 package org.http4k.connect.anthropic
 
-import org.http4k.testing.ApprovalTest
-import org.junit.jupiter.api.extension.ExtendWith
+import com.natpryce.hamkrest.assertion.assertThat
+import com.natpryce.hamkrest.equalTo
+import org.http4k.connect.anthropic.action.Content
+import org.http4k.connect.anthropic.action.Content.Text
+import org.http4k.connect.anthropic.action.Message
+import org.junit.jupiter.api.Test
 
-@ExtendWith(ApprovalTest::class)
 class MessageContentGeneratorTest {
-//
-//    private val input = ChatCompletion(
-//        ModelName.of("Meta-Llama-3.1-70B-Instruct"), listOf(Message(User, "foobar"))
-//    )
-//
-//    @Test
-//    fun `lorem ipsum`(approver: Approver) {
-//        approver.assertApproved(
-//            ChatCompletionGenerator.LoremIpsum()(input).toString()
-//        )
-//    }
-//
-//    @Test
-//    fun `reverse input`() {
-//        assertThat(
-//            ChatCompletionGenerator.ReverseInput(input),
-//            equalTo(
-//                listOf(Choice(0, ChoiceDetail(System, "raboof"), null, stop))
-//            )
-//        )
-//    }
-//
-//    @Test
-//    fun `echo input`() {
-//        assertThat(
-//            ChatCompletionGenerator.Echo(input),
-//            equalTo(
-//                listOf(Choice(0, ChoiceDetail(System, "foobar "), null, stop))
-//            )
-//        )
-//    }
+
+    private val input = listOf(Message.User(Text("foobar")))
+
+    @Test
+    fun `reverse input`() {
+        assertThat(MessageContentGenerator.ReverseInput(input), equalTo(listOf(Text("raboof") as Content)))
+    }
+
+    @Test
+    fun `echo reflects a block the client does not model`() {
+        val raw = """{"type":"future_block","note":"whatever"}"""
+
+        assertThat(
+            MessageContentGenerator.Echo(listOf(Message.User(Content.Unknown(raw)))),
+            equalTo(listOf(Text(raw) as Content))
+        )
+    }
 }

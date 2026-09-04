@@ -3,7 +3,6 @@ package org.http4k.internal
 import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import groovy.namespace.QName
 import groovy.util.Node
-import java.net.URI
 
 plugins {
     kotlin("jvm")
@@ -12,7 +11,7 @@ plugins {
     `maven-publish`
 }
 
-val license: ModuleLicense by project.extra
+val license = project.extra["license"] as ModuleLicense
 
 val metadata = kotlin.runCatching {
     (project.extensions.getByName("metadata") as? ProjectMetadata.Extension)
@@ -30,16 +29,8 @@ configure<MavenPublishBaseExtension> {
     configure<PublishingExtension> {
         repositories {
             maven {
-                name = "http4k"
-                url = URI("s3://http4k-maven")
-
-                val ltsPublishingUser: String? by project
-                val ltsPublishingPassword: String? by project
-
-                credentials(AwsCredentials::class.java) {
-                    accessKey = ltsPublishingUser
-                    secretKey = ltsPublishingPassword
-                }
+                name = "http4kLts"
+                url = rootProject.layout.buildDirectory.dir("lts-staging").get().asFile.toURI()
             }
         }
 
@@ -48,8 +39,8 @@ configure<MavenPublishBaseExtension> {
         if (enableSigning) {
             apply(plugin = "signing")
             signing {
-                val signingKey: String? by project
-                val signingPassword: String? by project
+                val signingKey = project.findProperty("signingKey") as String?
+                val signingPassword = project.findProperty("signingPassword") as String?
                 useInMemoryPgpKeys(signingKey, signingPassword)
                 sign(project.the<PublishingExtension>().publications)
             }
@@ -69,56 +60,8 @@ configure<MavenPublishBaseExtension> {
                 ModuleLicense.Http4kCommercial -> "org.http4k.pro"
             },
             project.name,
-            project.properties["releaseVersion"]?.toString() ?: "LOCAL"
+            project.findProperty("releaseVersion")?.toString() ?: "LOCAL"
         )
-
-        if (project.findProperty("includeProvenance") == "true") {
-            val version = project.properties["releaseVersion"]?.toString() ?: "LOCAL"
-            val buildDir = project.layout.buildDirectory.get().asFile
-
-            project.afterEvaluate {
-                publications.withType<MavenPublication>().matching { it.name == "maven" || it.name == "pluginMaven" }.configureEach {
-                    artifact(File(buildDir, "reports/${project.name}-sbom.json")) {
-                        classifier = "cyclonedx"
-                        extension = "json"
-                    }
-                    artifact(File(buildDir, "reports/${project.name}-sbom.json.sigstore.json")) {
-                        classifier = "cyclonedx-sigstore"
-                        extension = "json"
-                    }
-                    artifact(File(buildDir, "libs/${project.name}-${version}.jar.sigstore.json")) {
-                        classifier = "jar-sigstore"
-                        extension = "json"
-                    }
-                    artifact(
-                        File(
-                            rootProject.layout.buildDirectory.get().asFile,
-                            "provenance/${project.name}-${version}.provenance.json"
-                        )
-                    ) {
-                        classifier = "provenance"
-                        extension = "json"
-                    }
-                    artifact(
-                        File(
-                            rootProject.layout.buildDirectory.get().asFile,
-                            "provenance/${project.name}-${version}.provenance.json.sigstore.json"
-                        )
-                    ) {
-                        classifier = "provenance-sigstore"
-                        extension = "json"
-                    }
-                    artifact(File(buildDir, "reports/${project.name}-license-report.json")) {
-                        classifier = "license-report"
-                        extension = "json"
-                    }
-                    artifact(File(buildDir, "reports/${project.name}-license-report.json.sigstore.json")) {
-                        classifier = "license-report-sigstore"
-                        extension = "json"
-                    }
-                }
-            }
-        }
 
         pom {
             withXml {
@@ -137,7 +80,7 @@ configure<MavenPublishBaseExtension> {
                     .appendNode("connection", "scm:git:git@github.com:http4k/${rootProject.name}.git").parent()
                     .appendNode("developerConnection", "scm:git:git@github.com:http4k/${rootProject.name}.git")
 
-                val license: ModuleLicense by project.extra
+                val license = project.extra["license"] as ModuleLicense
 
                 asNode().appendNode("licenses").appendNode("license")
                     .appendNode("name", license.commonName).parent()

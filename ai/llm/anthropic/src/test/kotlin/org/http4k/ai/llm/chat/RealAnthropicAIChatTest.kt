@@ -20,5 +20,5 @@ class RealAnthropicAIChatTest : ChatContract, PortBasedTest {
     }
 
     override val chat = Chat.AnthropicAI(token(ENV)!!, JavaHttpClient().debug(), _2023_06_01)
-    override val model = AnthropicModels.Claude_Haiku_4_5
+    override val model = AnthropicModels.Claude_Sonnet_5
 }

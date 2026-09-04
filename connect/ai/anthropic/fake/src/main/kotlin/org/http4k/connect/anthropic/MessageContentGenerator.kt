@@ -1,10 +1,7 @@
 package org.http4k.connect.anthropic
 
 import org.http4k.connect.anthropic.action.Content
-import org.http4k.connect.anthropic.action.Content.Image
 import org.http4k.connect.anthropic.action.Content.Text
-import org.http4k.connect.anthropic.action.Content.ToolResult
-import org.http4k.connect.anthropic.action.Content.ToolUse
 import org.http4k.connect.anthropic.action.Message
 import java.util.Random
 
@@ -42,12 +39,10 @@ fun MessageContentGenerator.Companion.LoremIpsum(random: Random = Random(0)) = M
  */
 val MessageContentGenerator.Companion.Echo
     get() = MessageContentGenerator { req ->
-        req.last().content.map { c ->
-            when (c) {
-                is Image -> Text("some image content")
-                is Text -> Text(c.text)
-                is ToolResult -> Text("tool result " + c.content.toString())
-                is ToolUse -> Text("tool use " + c.name + " " + c.input.toString())
+        req.last().content.map {
+            when (it) {
+                is Text -> it
+                else -> Text(AnthropicAIMoshi.asFormatString(it))
             }
         }
     }

@@ -1,7 +1,7 @@
 package org.http4k.connect.ollama.action
 
 import org.http4k.ai.model.ModelName
-import org.http4k.ai.util.toCompletionSequence
+import org.http4k.ai.util.toJsonLinesSequence
 import org.http4k.connect.Http4kConnectAction
 import org.http4k.connect.ollama.Message
 import org.http4k.connect.ollama.OllamaAction
@@ -38,7 +38,7 @@ data class ChatCompletion(
         .with(autoBody<ChatCompletion>().toLens() of this)
 
     override fun toResult(response: Response) =
-        toCompletionSequence(response, OllamaMoshi, "", "__FAKE_HTTP4k_STOP_SIGNAL__")
+        toJsonLinesSequence(response, OllamaMoshi)
 }
 
 @JsonSerializable

@@ -151,7 +151,7 @@ private val Remove = inOrder(
     oneOf(token("REMOVE"), token("remove")), // fixme possible to be case insensitive?
     oneOrMore(
         inOrder(
-            optional(Tokens.whitespace),
+            optional(oneOf(token(","), Tokens.whitespace)),
             Name,
             optional(index)
         ).skipFirst()
@@ -162,7 +162,7 @@ private val Remove = inOrder(
             val name = nameAndIndex.first.eval(curItem) as AttributeName
             val updated = nameAndIndex.second?.toInt()
                 ?.let { index -> curItem.item + (name to curItem.item[name]!!.delete(index)) } // remove element from list
-                ?: (curItem.item - name)  // remove attribute
+                ?: (curItem.item - name) // remove attribute
 
             curItem.copy(item = updated)
         }.item
@@ -202,7 +202,6 @@ private val Add = inOrder(
             val name = nameExp.eval(item) as AttributeName
             val value = valueExp.eval(item) as AttributeValue
             name to (item.item[name]?.plus(value) ?: value)
-
         }
     }
 }

@@ -55,26 +55,36 @@ data class AttributeValue internal constructor(
     }
 
     override fun equals(other: Any?): Boolean {
-        return when {
-            other !is AttributeValue -> false
-            B != null && other.B != null -> B == other.B
-            BOOL != null -> BOOL == other.BOOL
-            BS != null -> BS == other.BS
-            L != null -> L == other.L
-            M != null -> M == other.M
+        when {
+            other !is AttributeValue -> return false
+
+            B != null && other.B != null -> return B == other.B
+
+            BOOL != null -> return BOOL == other.BOOL
+
+            BS != null -> return BS == other.BS
+
+            L != null -> return L == other.L
+
+            M != null -> return M == other.M
+
             // N must be equated by comparing as BigDecimal; otherwise 123 != 123.0
-            N != null && other.N != null -> N.toBigDecimal().compareTo(other.N.toBigDecimal()) == 0
+            N != null && other.N != null -> return N.toBigDecimal().compareTo(other.N.toBigDecimal()) == 0
+
             NS != null && other.NS != null -> {
                 if (NS.size != other.NS.size) return false
                 val thisNumbers = NS.map { it.toBigDecimal() }.sorted()
                 val otherNumbers = other.NS.map { it.toBigDecimal() }.sorted()
-                thisNumbers.zip(otherNumbers).all { it.first.compareTo(it.second) == 0 }
+                return thisNumbers.zip(otherNumbers).all { it.first.compareTo(it.second) == 0 }
             }
 
-            NULL != null -> NULL == other.NULL
-            S != null -> S == other.S
-            SS != null -> SS == other.SS
-            else -> false
+            NULL != null -> return NULL == other.NULL
+
+            S != null -> return S == other.S
+
+            SS != null -> return SS == other.SS
+
+            else -> return false
         }
     }
 
@@ -138,18 +148,26 @@ data class AttributeValue internal constructor(
         @Suppress("UNCHECKED_CAST")
         fun from(key: DynamoDataType, value: Any): AttributeValue = when (key) {
             DynamoDataType.B -> Base64(Base64Blob.of(value as String))
+
             DynamoDataType.BOOL -> Bool(value.toString().toBoolean())
+
             DynamoDataType.BS -> Base64Set((value as List<String>).map(Base64Blob::of).toSet())
+
             DynamoDataType.L -> List((value as List<Map<String, Any>>).map { it.toAttributeValue() })
+
             DynamoDataType.M -> Map(
                 (value as Map<String, Map<String, Any>>)
                     .map { AttributeName.of(it.key) to it.value.toAttributeValue() }.toMap()
             )
 
             DynamoDataType.N -> Num(BigDecimal(value as String))
+
             DynamoDataType.NS -> NumSet((value as List<String>).map(::BigDecimal).toSet())
+
             DynamoDataType.NULL -> Null()
+
             DynamoDataType.S -> Str(value as String)
+
             DynamoDataType.SS -> StrSet((value as List<String>).toSet())
         }
 

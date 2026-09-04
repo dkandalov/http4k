@@ -64,10 +64,11 @@ class X402EndToEndTest {
     @Suppress("UNCHECKED_CAST")
     private val fakeFacilitator = object : X402Facilitator {
         override fun <R> invoke(action: X402FacilitatorAction<R>): Result<R, RemoteFailure> = when (action) {
-            is Verify -> (if (action.payload.payload["signature"] == "0xsigned")
+            is Verify -> (if (action.payload.payload["signature"] == "0xsigned") {
                 Success(VerifiedResponse(payer = WalletAddress.of("0xpayer")))
-            else
-                Failure(RemoteFailure(POST, Uri.of("/verify"), OK, "invalid signature"))) as Result<R, RemoteFailure>
+            } else {
+                Failure(RemoteFailure(POST, Uri.of("/verify"), OK, "invalid signature"))
+            }) as Result<R, RemoteFailure>
 
             is Settle -> Success(
                 SettledResponse(
@@ -96,6 +97,19 @@ class X402EndToEndTest {
         assertThat(settleResponse.transaction, equalTo(TransactionHash.of("0xtx123")))
         assertThat(settleResponse.network, equalTo(PaymentNetwork.of("base-sepolia")))
         assertThat(settleResponse.payer, equalTo(WalletAddress.of("0xpayer")))
+    }
+
+    @Test
+    fun `full round trip with resource binding enabled`() {
+        val server = ServerFilters.X402PaymentRequired(fakeFacilitator, resourceFor = { it.uri.toString() }) { listOf(requirements) }
+            .then { Response(OK).body("premium content") }
+
+        val client = ClientFilters.X402PaymentRequired(fakeSigner).then(server)
+
+        val response = client(Request(GET, "/data"))
+
+        assertThat(response.status, equalTo(OK))
+        assertThat(response.bodyString(), equalTo("premium content"))
     }
 
     @Test

@@ -25,12 +25,14 @@ import org.http4k.routing.routes
 import org.http4k.security.passkeys.Principal.Known
 import org.http4k.security.passkeys.model.AuthenticationOptions
 import org.http4k.security.passkeys.model.AuthenticationResponse
+import org.http4k.security.passkeys.model.AuthenticatorSelection
 import org.http4k.security.passkeys.model.CredentialDescriptor
 import org.http4k.security.passkeys.model.PasskeyUser
 import org.http4k.security.passkeys.model.PendingCeremony
 import org.http4k.security.passkeys.model.RegistrationOptions
 import org.http4k.security.passkeys.model.RegistrationResponse
 import org.http4k.security.passkeys.model.RelyingParty
+import org.http4k.security.passkeys.model.UserVerification.REQUIRED
 import org.http4k.security.passkeys.model.WebAuthnPolicy
 import org.http4k.security.passkeys.util.AuthenticationResult
 import org.http4k.security.passkeys.util.PasskeysJson.json
@@ -62,6 +64,7 @@ class Passkeys private constructor(
     private val registerOptions: HttpHandler = { request ->
         when (val user = userFor(request)) {
             null -> Response(UNAUTHORIZED)
+
             else -> {
                 val challenge = newChallenge()
                 val body = registrationOptions(challenge, user, persistence.findByUser(user.handle))
@@ -74,6 +77,7 @@ class Passkeys private constructor(
         val pending = persistence.retrievePending(request)
         val response = when {
             pending?.user == null -> Response(BAD_REQUEST)
+
             else -> {
                 val options = registrationOptions(pending.challenge, pending.user, emptyList())
                 when (val result = verifier.verifyRegistration(options, request.json<RegistrationResponse>())) {
@@ -82,6 +86,7 @@ class Passkeys private constructor(
                         val existing = persistence.findById(credential.credentialId)
                         when {
                             existing != null && existing.userHandle != credential.userHandle -> Response(BAD_REQUEST)
+
                             else -> principals.write(credential.userHandle, Response(OK))
                                 .also { persistence.save(credential) }
                         }
@@ -106,11 +111,13 @@ class Passkeys private constructor(
         val pending = persistence.retrievePending(request)
         val response = when {
             pending == null -> Response(BAD_REQUEST)
+
             else -> {
                 val response = request.json<AuthenticationResponse>()
                 val stored = persistence.findById(response.credentialId)
                 when {
                     stored == null -> Response(UNAUTHORIZED)
+
                     else ->
                         when (val result = verifier.verifyAuthentication(
                             authenticationOptions(pending.challenge, emptyList()), response, stored
@@ -190,7 +197,9 @@ class Passkeys private constructor(
             principals: Principals,
             user: (Request) -> PasskeyUser?,
             onUnauthenticated: (Request) -> Response = { Response(UNAUTHORIZED) },
-            policy: WebAuthnPolicy = WebAuthnPolicy(),
+            policy: WebAuthnPolicy = WebAuthnPolicy(
+                authenticatorSelection = AuthenticatorSelection(userVerification = REQUIRED)
+            ),
             allowedCredentialsFor: (Request) -> List<CredentialDescriptor> = { emptyList() },
             newChallenge: () -> Base64UriBlob = { Base64UriBlob.randomChallenge() }
         ) = Passkeys(

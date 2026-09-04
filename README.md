@@ -1,3 +1,10 @@
+<span class="github">
+<blockquote>
+<p>
+<strong>Distribution notice</strong> - from 1 October 2026, new releases of http4k will be published to Maven Central quarterly. Publication to <a href="https://maven.http4k.org">maven.http4k.org</a> continues on the normal 1-2 week cadence. Both channels are supported. Background and current status can be found <strong><a href="https://www.http4k.org/distribution/">here</a></strong>.</p>
+</blockquote>
+</span>
+
 <hr/>
 <img src="https://http4k.org/images/logo-http4k.png" alt="http4k logo">
 <hr/>
@@ -6,6 +13,7 @@
 <a href="https://mvnrepository.com/artifact/org.http4k"><img alt="download" src="https://img.shields.io/maven-central/v/org.http4k/http4k-core"></a>
 <a href="https://codecov.io/gh/http4k/http4k"><img src="https://codecov.io/gh/http4k/http4k/branch/master/graph/badge.svg" /></a>
 <a href="http://www.apache.org/licenses/LICENSE-2.0"><img alt="GitHub license" src="https://img.shields.io/badge/license-Apache%20License%202.0-blue.svg?style=flat"></a>
+<a href="https://www.bestpractices.dev/projects/13771"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/13771/badge"></a>
 <a href="https://plugins.jetbrains.com/plugin/25243-http4k-toolbox"><img alt="intellij-badge" src="https://img.shields.io/jetbrains/plugin/v/25243-http4k-toolbox?label=intellij%20plugin"></a>
 <a href="https://kotlin.link"><img alt="awesome kotlin" src="https://kotlin.link/awesome-kotlin.svg"></a>
 <a href="https://opencollective.com/http4k"><img alt="Kotlin Slack" src="https://img.shields.io/badge/chat-kotlin%20slack-orange.svg"></a>
@@ -47,6 +55,15 @@ dependencies {
 }
 ```
 
+### Release channels
+
+http4k is published to Maven Central and to [maven.http4k.org](https://maven.http4k.org). From 1 October
+2026, Sonatype publishing limits will mean releases reach Maven Central approximately quarterly, while
+maven.http4k.org continues on the normal 1-2 week cadence. Both channels are supported, and the Community
+Edition remains free, Apache-2.0 and on Maven Central.
+
+For details, see [http4k.org/distribution](https://www.http4k.org/distribution/).
+
 ## Acknowledgments
 
 * [Dan Bodart](https://twitter.com/DanielBodart)'s **utterlyidle**
@@ -56,3 +73,4 @@ dependencies {
 [http4k]: https://http4k.org 
 
 <img src="https://static.scarf.sh/a.png?x-pxid=90ad22e8-2304-4739-a487-3be143207ba8" alt="scarf"/>
+

@@ -17,10 +17,22 @@ import org.http4k.multipart.StreamTooLongException
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import java.io.File
 import java.io.InputStream
 import kotlin.io.path.createTempDirectory
 
 class MultipartFormBodyTest {
+
+    @Test
+    fun `constructing a MultipartFormBody does not eagerly create a temp directory`() {
+        val tmp = File(System.getProperty("java.io.tmpdir"))
+        fun http4kDirs() = tmp.listFiles { f -> f.isDirectory && f.name.startsWith("http4k-mp") }?.size ?: 0
+        val before = http4kDirs()
+
+        MultipartFormBody()
+
+        assertThat(http4kDirs(), equalTo(before))
+    }
 
     @Test
     fun `retrieving files and fields`() {
@@ -112,7 +124,7 @@ class MultipartFormBodyTest {
             .body(original))
 
         assertThat(streams, closed)
-        //original stream are automatically closed during parsing
+        // original stream are automatically closed during parsing
     }
 
     @Test

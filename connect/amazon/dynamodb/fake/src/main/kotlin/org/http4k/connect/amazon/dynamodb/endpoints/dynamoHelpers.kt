@@ -2,28 +2,38 @@
 
 package org.http4k.connect.amazon.dynamodb.endpoints
 
+import org.http4k.connect.amazon.AwsJsonFake
 import org.http4k.connect.amazon.JsonError
 import org.http4k.connect.amazon.dynamodb.DynamoDbMoshi
 import org.http4k.connect.amazon.dynamodb.DynamoTable
+import org.http4k.connect.amazon.dynamodb.action.ConditionalCheckFailed
 import org.http4k.connect.amazon.dynamodb.action.ModifiedItem
 import org.http4k.connect.amazon.dynamodb.endpoints.UpdateResult.NotFound
 import org.http4k.connect.amazon.dynamodb.grammar.AttributeNameValue
+import org.http4k.connect.amazon.dynamodb.grammar.DynamoDbConditionError
 import org.http4k.connect.amazon.dynamodb.grammar.DynamoDbConditionalGrammar
 import org.http4k.connect.amazon.dynamodb.grammar.DynamoDbProjectionGrammar
 import org.http4k.connect.amazon.dynamodb.grammar.DynamoDbUpdateGrammar
+import org.http4k.connect.amazon.dynamodb.grammar.Expr
 import org.http4k.connect.amazon.dynamodb.grammar.ItemWithSubstitutions
 import org.http4k.connect.amazon.dynamodb.model.AttributeName
 import org.http4k.connect.amazon.dynamodb.model.AttributeValue
 import org.http4k.connect.amazon.dynamodb.model.IndexName
 import org.http4k.connect.amazon.dynamodb.model.Item
+import org.http4k.connect.amazon.dynamodb.model.ItemResult
 import org.http4k.connect.amazon.dynamodb.model.Key
 import org.http4k.connect.amazon.dynamodb.model.KeySchema
 import org.http4k.connect.amazon.dynamodb.model.KeyType
+import org.http4k.connect.amazon.dynamodb.model.ReturnValuesOnConditionCheckFailure
+import org.http4k.connect.amazon.dynamodb.model.ReturnValuesOnConditionCheckFailure.ALL_OLD
 import org.http4k.connect.amazon.dynamodb.model.TableDescription
 import org.http4k.connect.amazon.dynamodb.model.TableName
 import org.http4k.connect.amazon.dynamodb.model.TokensToNames
 import org.http4k.connect.amazon.dynamodb.model.TokensToValues
 import org.http4k.connect.storage.Storage
+import org.http4k.core.Response
+import org.http4k.core.Status.Companion.BAD_REQUEST
+import org.http4k.core.Status.Companion.OK
 
 fun Item.asItemResult(): Map<String, Map<String, Any>> =
     mapKeys { it.key.value }.mapValues { convert(it.value) }
@@ -49,6 +59,7 @@ fun Item.project(
         .map { (name: AttributeName, values: List<AttributeValue>) ->
             name to when {
                 values[0].L != null -> AttributeValue.List(values.flatMap { it.L!! })
+
                 values[0].M != null -> AttributeValue.Map(values
                     .map { it.M!! }
                     .fold(Item()) { acc, next -> acc + next })
@@ -61,15 +72,53 @@ fun Item.project(
 /**
  * Apply the conditional expression to the Item. If the condition is null or resolves to true returns the item,
  * or returns null.
+ *
+ * The expression is checked against the substitutions before it is evaluated, so a reference that DynamoDB
+ * would reject outright is reported whatever the item happens to hold - see [Expr.validate].
  */
 fun Item.condition(
     expression: String?,
     expressionAttributeNames: TokensToNames?,
     expressionAttributeValues: TokensToValues?
+) = takeIfMatches(
+    conditionExpression(expression, expressionAttributeNames, expressionAttributeValues),
+    expressionAttributeNames,
+    expressionAttributeValues
+)
+
+/**
+ * Parse a conditional expression and check it against the substitutions, so that a request which
+ * DynamoDB would reject outright is reported before any item is looked at.
+ */
+internal fun conditionExpression(
+    expression: String?,
+    expressionAttributeNames: TokensToNames?,
+    expressionAttributeValues: TokensToValues?
+) = expression?.let {
+    DynamoDbConditionalGrammar.parse(it).also { parsed ->
+        parsed.validate(
+            ItemWithSubstitutions(
+                Item(),
+                expressionAttributeNames ?: emptyMap(),
+                expressionAttributeValues ?: emptyMap()
+            )
+        )
+    }
+}
+
+/**
+ * The item when the already-parsed condition resolves to true against it (or when there is no condition),
+ * otherwise null.
+ */
+internal fun Item.takeIfMatches(
+    expression: Expr?,
+    expressionAttributeNames: TokensToNames?,
+    expressionAttributeValues: TokensToValues?
 ) = when (expression) {
     null -> this
+
     else -> takeIf {
-        DynamoDbConditionalGrammar.parse(expression).eval(
+        expression.eval(
             ItemWithSubstitutions(
                 this,
                 expressionAttributeNames ?: emptyMap(),
@@ -85,6 +134,7 @@ fun Item.update(
     expressionAttributeValues: TokensToValues?
 ) = when (expression) {
     null -> this
+
     else -> DynamoDbUpdateGrammar.parse(expression).eval(
         ItemWithSubstitutions(
             this,
@@ -162,10 +212,17 @@ sealed interface UpdateResult {
         override val result = ModifiedItem(item.asItemResult())
     }
 
-    data object ConditionFailed : UpdateResult {
-        override val result = JsonError(
-            "com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException",
-            "The conditional request failed"
+    /**
+     * [item] is the record which blocked the write, and is set only when the request asked for it
+     * with ReturnValuesOnConditionCheckFailure=ALL_OLD. It cannot be reported through the shared
+     * [JsonError], which every AWS fake uses and so cannot carry a DynamoDB item - hence the
+     * dedicated body type, which [conditionCheckAware] maps back onto a 400.
+     */
+    data class ConditionFailed(val item: ItemResult? = null) : UpdateResult {
+        override val result = ConditionalCheckFailed(
+            __type = "com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException",
+            Message = "The conditional request failed",
+            Item = item
         )
     }
 
@@ -174,10 +231,52 @@ sealed interface UpdateResult {
     }
 }
 
-internal fun <Req> Storage<DynamoTable>.runUpdate(table: TableName, t: Req, update: TryModifyItem<Req>): Any? {
-    val updateResult = this[table.value]?.let { update(t, it) } ?: NotFound
-    if (updateResult is UpdateResult.UpdateOk) this[table.value] = updateResult.updatedTable
-    return updateResult.result
+/**
+ * Standard response handling, extended to report [ConditionalCheckFailed] as the 400 which the
+ * shared [JsonError] path would otherwise have given it.
+ */
+internal fun AwsJsonFake.conditionCheckAware(result: Any): Response = when (result) {
+    is ConditionalCheckFailed -> Response(BAD_REQUEST).body(autoMarshalling.asFormatString(result))
+    else -> Response(OK).body(autoMarshalling.asFormatString(result))
 }
+
+/**
+ * The `ValidationException` DynamoDB answers with when an expression cannot be resolved against the
+ * request's substitutions. [name] is the request field being reported on, eg `ConditionExpression`.
+ */
+internal fun invalidExpression(name: String, e: DynamoDbConditionError) = JsonError(
+    "com.amazon.coral.validate#ValidationException",
+    "Invalid $name: ${e.message}"
+)
+
+/**
+ * Runs a write whose `ConditionExpression` is evaluated somewhere inside it, mapping an unresolvable
+ * expression onto the 400 the real service answers rather than letting it escape as a 500. This is the
+ * *request* error - distinct from, and evaluated before, the [ConditionalCheckFailed] 400 that
+ * [conditionCheckAware] reports for a condition which resolved and came out false.
+ */
+internal fun conditionErrorAware(write: () -> Any?): Any? = try {
+    write()
+} catch (e: DynamoDbConditionError) {
+    invalidExpression("ConditionExpression", e)
+}
+
+/**
+ * The item to report back on a failed condition: only when the request asked for it, and only when
+ * there was a stored record to return.
+ */
+internal fun Item?.returnedOnConditionFailure(returnValues: ReturnValuesOnConditionCheckFailure?) =
+    takeIf { returnValues == ALL_OLD }?.asItemResult()
+
+/**
+ * Serialised on the storage - the monitor the other write paths hold - so that two concurrent writes
+ * cannot both read the pre-write table and have the loser overwrite the winner.
+ */
+internal fun <Req> Storage<DynamoTable>.runUpdate(table: TableName, t: Req, update: TryModifyItem<Req>): Any? =
+    synchronized(this) {
+        val updateResult = this[table.value]?.let { update(t, it) } ?: NotFound
+        if (updateResult is UpdateResult.UpdateOk) this[table.value] = updateResult.updatedTable
+        updateResult.result
+    }
 
 fun interface TryModifyItem<T> : (T, DynamoTable) -> UpdateResult

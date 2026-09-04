@@ -57,11 +57,15 @@ internal class StreamingMultipartFormParts private constructor(inBoundary: ByteA
                     state = FindBoundary
                     findBoundary()
                 }
+
                 else -> state = Eos
             }
         } else {
-            state = if (!inputStream.matchInStream(FIELD_SEPARATOR)) throw TokenNotFoundException("Boundary must be followed by field separator, but didn't find it")
-            else Header
+            state = if (!inputStream.matchInStream(FIELD_SEPARATOR)) {
+                throw TokenNotFoundException("Boundary must be followed by field separator, but didn't find it")
+            } else {
+                Header
+            }
         }
     }
 
@@ -74,6 +78,7 @@ internal class StreamingMultipartFormParts private constructor(inBoundary: ByteA
 
         val contentType = headers["Content-Type"]
         return if (contentType != null && contentType.startsWith("multipart/mixed")) {
+            if (mixedName != null) throw ParseError("nested multipart/mixed not supported")
             val contentDisposition = ParameterParser().parse(headers["Content-Disposition"], ';')
             val contentTypeParams = ParameterParser().parse(contentType, ';')
 
@@ -102,13 +107,17 @@ internal class StreamingMultipartFormParts private constructor(inBoundary: ByteA
         }
     }
 
-    private fun filenameFromMap(contentDisposition: Map<String, String>): String? = if (contentDisposition.containsKey("filename")) trim(contentDisposition["filename"]
-        ?: "") else null
+    private fun filenameFromMap(contentDisposition: Map<String, String>): String? = if (contentDisposition.containsKey("filename")) {
+        trim(contentDisposition["filename"]
+            ?: "")
+    } else {
+        null
+    }
 
     private fun trim(string: String?): String? = string?.trim { it <= ' ' }
 
     private fun parseHeaderLines(): Map<String, String> {
-        if (Header != state) throw IllegalStateException("Expected state $Header but got $state")
+        if (Header != state) error("Expected state $Header but got $state")
 
         val result = TreeMap<String, String>(CASE_INSENSITIVE_ORDER)
         var previousHeaderName: String? = null
@@ -120,14 +129,17 @@ internal class StreamingMultipartFormParts private constructor(inBoundary: ByteA
                     state = Contents
                     return result
                 }
+
                 header.matches("\\s+.*".toRegex()) -> {
                     val name = previousHeaderName ?: throw ParseError("Header continuation with no preceding header <<$header>>")
                     result[name] = result[name] + "; " + header.trim { it <= ' ' }
                 }
+
                 else -> {
                     val index = header.indexOf(":")
-                    if (index < 0) throw ParseError("Header didn't include a colon <<$header>>")
-                    else {
+                    if (index < 0) {
+                        throw ParseError("Header didn't include a colon <<$header>>")
+                    } else {
                         previousHeaderName = header.substring(0, index).trim { it <= ' ' }
                         result[previousHeaderName] = header.substring(index + 1).trim { it <= ' ' }
                     }
@@ -167,7 +179,6 @@ internal class StreamingMultipartFormParts private constructor(inBoundary: ByteA
                 if (isEndOfStream()) throw NoSuchElementException("No more parts in this MultipartForm")
                 nextIsKnown = false
             } else {
-
                 if (state == Contents) currentPart!!.inputStream.close()
 
                 currentPart = safelyParseNextPart()
@@ -193,7 +204,13 @@ internal class StreamingMultipartFormParts private constructor(inBoundary: ByteA
         private var endOfStream = false
         private var closed = false
 
-        override fun read(): Int = if (closed) throw AlreadyClosedException() else if (endOfStream) -1 else readNextByte()
+        override fun read(): Int = if (closed) {
+            throw AlreadyClosedException()
+        } else if (endOfStream) {
+            -1
+        } else {
+            readNextByte()
+        }
 
         private fun readNextByte(): Int {
             return when (val result = inputStream.readByteFromStreamUnlessTokenMatched(boundaryWithPrefix)) {
@@ -202,11 +219,13 @@ internal class StreamingMultipartFormParts private constructor(inBoundary: ByteA
                     endOfStream = true
                     -1
                 }
+
                 -2 -> {
                     state = BoundaryFound
                     endOfStream = true
                     -1 // inputStream.read(byte b[], int off, int len) checks for exactly -1
                 }
+
                 else -> result
             }
         }
@@ -282,8 +301,10 @@ internal class StreamingMultipartFormParts private constructor(inBoundary: ByteA
          * @return an `Iterable<StreamingPart>` that you can for() through to get each part
          * @throws IOException
          */
+        const val DEFAULT_MAX_STREAM_LENGTH = 10 * 1024 * 1024
+
         fun parse(boundary: ByteArray, inputStream: InputStream, encoding: Charset): Iterable<StreamingPart> =
-            StreamingMultipartFormParts(boundary, encoding, TokenBoundedInputStream(inputStream, DEFAULT_BUFSIZE))
+            parse(boundary, inputStream, encoding, DEFAULT_MAX_STREAM_LENGTH)
 
         fun parse(boundary: ByteArray, inputStream: InputStream, encoding: Charset, maxStreamLength: Int): Iterable<StreamingPart> =
             StreamingMultipartFormParts(boundary, encoding, TokenBoundedInputStream(inputStream, DEFAULT_BUFSIZE, maxStreamLength))

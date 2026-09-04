@@ -13,6 +13,7 @@ dependencies {
     api(libs.result4k)
 
     api(project(":http4k-format-core"))
+    api(project(":http4k-realtime-core"))
 
     api(project(":http4k-format-moshi")) {
         exclude("org.jetbrains.kotlin", "kotlin-reflect")

@@ -57,6 +57,7 @@ object JettyClient {
                 try {
                     when (bodyMode) {
                         Memory -> send().let { it.toHttp4kResponse().body(Body(it.content.asByteBuffer())) }
+
                         Stream -> InputStreamResponseListener().run {
                             send(this)
                             get(timeoutOrMax(), MILLISECONDS).toHttp4kResponse().body(inputStream)
@@ -112,6 +113,7 @@ object JettyClient {
                     .body(
                         when (bodyMode) {
                             Memory -> ByteBufferRequestContent(request.body.payload)
+
                             Stream -> InputStreamRequestContent(
                                 "application/octet-stream", request.body.stream,
                                 ByteBufferPool.Sized(null, false, bufferSize)
@@ -121,10 +123,9 @@ object JettyClient {
                     .let(requestModifier)
                     .let { jettyRequest ->
                         request.body.length?.let { len ->
-                            jettyRequest.headers { headers -> headers.add("content-length", len.toString()) }
+                            jettyRequest.headers { headers -> headers.put("content-length", len.toString()) }
                         } ?: jettyRequest
                     }
-
 
             private fun JettyRequest.timeoutOrMax() = if (timeout <= 0) Long.MAX_VALUE else timeout
 

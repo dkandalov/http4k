@@ -13,7 +13,6 @@ import org.http4k.connect.model.Timestamp
 import org.http4k.core.Uri
 import se.ansman.kotshi.JsonSerializable
 
-
 class PoolName private constructor(value: String) : StringValue(value) {
     companion object : NonBlankStringValueFactory<PoolName>(::PoolName)
 }
@@ -91,7 +90,7 @@ enum class VerifyStatus {
 }
 
 enum class ChallengeName {
-    SMS_MFA , EMAIL_OTP , SOFTWARE_TOKEN_MFA , SELECT_MFA_TYPE , MFA_SETUP , PASSWORD_VERIFIER , CUSTOM_CHALLENGE , SELECT_CHALLENGE , DEVICE_SRP_AUTH , DEVICE_PASSWORD_VERIFIER , ADMIN_NO_SRP_AUTH , NEW_PASSWORD_REQUIRED , SMS_OTP , PASSWORD , WEB_AUTHN , PASSWORD_SRP
+    SMS_MFA, EMAIL_OTP, SOFTWARE_TOKEN_MFA, SELECT_MFA_TYPE, MFA_SETUP, PASSWORD_VERIFIER, CUSTOM_CHALLENGE, SELECT_CHALLENGE, DEVICE_SRP_AUTH, DEVICE_PASSWORD_VERIFIER, ADMIN_NO_SRP_AUTH, NEW_PASSWORD_REQUIRED, SMS_OTP, PASSWORD, WEB_AUTHN, PASSWORD_SRP
 }
 
 enum class AdvancedSecurityMode {
@@ -99,11 +98,11 @@ enum class AdvancedSecurityMode {
 }
 
 enum class AuthFlow {
-    USER_SRP_AUTH, REFRESH_TOKEN_AUTH, REFRESH_TOKEN, CUSTOM_AUTH, ADMIN_NO_SRP_AUTH, USER_PASSWORD_AUTH, ADMIN_USER_PASSWORD_AUTH
+    USER_SRP_AUTH, REFRESH_TOKEN_AUTH, REFRESH_TOKEN, CUSTOM_AUTH, ADMIN_NO_SRP_AUTH, USER_PASSWORD_AUTH, ADMIN_USER_PASSWORD_AUTH, USER_AUTH
 }
 
 enum class ExplicitAuthFlow {
-    ADMIN_NO_SRP_AUTH, CUSTOM_AUTH_FLOW_ONLY, USER_PASSWORD_AUTH, ALLOW_ADMIN_USER_PASSWORD_AUTH, ALLOW_CUSTOM_AUTH, ALLOW_USER_PASSWORD_AUTH, ALLOW_USER_SRP_AUTH, ALLOW_REFRESH_TOKEN_AUTH
+    ADMIN_NO_SRP_AUTH, CUSTOM_AUTH_FLOW_ONLY, USER_PASSWORD_AUTH, ALLOW_ADMIN_USER_PASSWORD_AUTH, ALLOW_CUSTOM_AUTH, ALLOW_USER_PASSWORD_AUTH, ALLOW_USER_SRP_AUTH, ALLOW_REFRESH_TOKEN_AUTH, ALLOW_USER_AUTH
 }
 
 enum class MessageAction {
@@ -143,7 +142,7 @@ enum class UsernameAttribute {
 }
 
 enum class UserMFASetting {
-    SMS_MFA, SOFTWARE_TOKEN_MFA
+    SMS_MFA, SOFTWARE_TOKEN_MFA, EMAIL_OTP
 }
 
 enum class OAuthFlow {
@@ -163,6 +162,29 @@ data class MFAOptions(
 )
 
 @JsonSerializable
+data class SMSMfaSettingsType(
+    val Enabled: Boolean? = null,
+    val PreferredMfa: Boolean? = null
+)
+
+@JsonSerializable
+data class SoftwareTokenMfaSettingsType(
+    val Enabled: Boolean? = null,
+    val PreferredMfa: Boolean? = null
+)
+
+@JsonSerializable
+data class EmailMfaSettingsType(
+    val Enabled: Boolean? = null,
+    val PreferredMfa: Boolean? = null
+)
+
+@JsonSerializable
+data class WebAuthnMfaSettingsType(
+    val Enabled: Boolean? = null
+)
+
+@JsonSerializable
 data class User(
     val Username: Username? = null,
     val UserStatus: UserStatus? = null,
@@ -172,7 +194,6 @@ data class User(
     val UserCreateDate: Timestamp? = null,
     val UserLastModifiedDate: Timestamp? = null
 )
-
 
 @JsonSerializable
 data class AnalyticsMetadata(
@@ -274,7 +295,6 @@ data class StringAttributeConstraints(
     val MaxLength: String? = null,
     val MinLength: String? = null
 )
-
 
 @JsonSerializable
 data class SchemaAttributeType(
