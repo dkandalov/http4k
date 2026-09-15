@@ -1,0 +1,175 @@
+/*
+ * Copyright (c) 2025-present http4k Ltd. All rights reserved.
+ * Licensed under the http4k Commercial License: https://http4k.org/commercial-license
+ */
+package org.http4k.postbox
+
+import dev.forkhandles.result4k.Failure
+import dev.forkhandles.result4k.Result
+import dev.forkhandles.result4k.Success
+import dev.forkhandles.tx.Transactional
+import dev.forkhandles.values.StringValue
+import dev.forkhandles.values.StringValueFactory
+import dev.forkhandles.values.and
+import dev.forkhandles.values.maxLength
+import dev.forkhandles.values.minLength
+import org.http4k.core.Request
+import org.http4k.core.Response
+import org.http4k.lens.Path
+import org.http4k.lens.asResult
+import java.time.Duration
+import java.time.Instant
+
+/**
+ * Postbox is the storage mechanism for requests that are to be processed asynchronously.
+ */
+interface Postbox {
+    /**
+     * Store a request in the Postbox for later processing.
+     *
+     * @param pending the request to store, which includes an id and the request itself
+     *
+     * If the request is already stored, it will ignore the new value and return the status of the existing one.
+     *
+     * @return the status of the request processing
+     *  - If the request is new or has not been processed, the status will be [RequestProcessingStatus.Pending]
+     *  - If the request is currently being processed, the status will be [RequestProcessingStatus.Processing]
+     *  - If the request has been processed, the status will be [RequestProcessingStatus.Processed]
+     *  - If the request has been marked as dead, the status will be [RequestProcessingStatus.Dead]
+     */
+    fun store(requestId: RequestId, request: Request): Result<RequestProcessingStatus, PostboxError>
+
+    /**
+     * Retrieve the status of a request.
+     *
+     * @param requestId the id of the request to check
+     *
+     * @return the status of the request processing
+     *   - If the request has not been processed, the status will be [RequestProcessingStatus.Pending]
+     *   - If the request is being processed, the status will be [RequestProcessingStatus.Processing]
+     *   - If the request has been processed, the status will be [RequestProcessingStatus.Processed]
+     *   - If the request is not found, the result will be a failure with [PostboxError.RequestNotFound]
+     */
+    fun status(requestId: RequestId): Result<RequestProcessingStatus, PostboxError>
+
+    /**
+     * Mark a request as processed with the given response.
+     *
+     * The stored response is always replaced with the provided one.
+     *
+     * @return
+     *  - If the request was successfully marked as processed, the result will be a success with [Unit]
+     *  - If the request has been already processed or marked as dead, the result will be a failure with [PostboxError.StorageFailure]
+     *  - If the request is not present, the result will be a failure with  [PostboxError.RequestNotFound]
+     */
+    fun markProcessed(requestId: RequestId, response: Response): Result<Unit, PostboxError>
+
+    /**
+     * Mark a request as failed with the given delay for reprocessing and an optional response.
+     *
+     * @param requestId the id of the request to mark as failed
+     * @param delayReprocessing the delay before reprocessing the request
+     * @param response the response to store with the failed request (optional)
+     *
+     * The stored response is replaced with the provided one. If no response is provided, any previously stored
+     * response is cleared.
+     *
+     * @return
+     *  - If the request was successfully marked as failed, the result will be a success with [Unit]
+     *  - If the request is not found, the result will be a failure with [PostboxError.RequestNotFound]
+     *  - If the request has been already processed or marked as dead, the result will be a failure with [PostboxError.StorageFailure]
+     */
+    fun markFailed(requestId: RequestId, delayReprocessing: Duration, response: Response?): Result<Unit, PostboxError>
+
+    /**
+     * Mark a request as permanently failed (dead) with an optional response.
+     *
+     * @param requestId the id of the request to mark as dead
+     * @param response the response to store with the dead request (optional)
+     *
+     * For a pending or processing request, the stored response is replaced with the provided one (or cleared if none
+     * is provided). For a request that has already been marked as dead, the first stored response is retained, and a
+     * missing response is filled with the provided one. Subsequent responses will be ignored.
+     *
+     * @return
+     *   - If the request was successfully marked as dead, returns a success with [Unit]
+     *   - If the request is not found, the result will be a failure with [PostboxError.RequestNotFound]
+     *   - If the request has been already processed, the result will be a failure with [PostboxError.StorageFailure]
+     */
+    fun markDead(requestId: RequestId, response: Response? = null): Result<Unit, PostboxError>
+
+    /**
+     * Retrieve all pending requests. Those are the ones that have not been claimed for processing,
+     * marked as processed or marked as dead yet.
+     *
+     * It includes requests that have been delayed for reprocessing if they are due.
+     *
+     * This does not modify the stored requests, it just reports them.
+     *
+     * @return a list of the pending requests in first-in-first-out order, limited to [batchSize]
+     */
+    fun pendingRequests(batchSize: Int, atTime: Instant): List<PendingRequest>
+
+    /**
+     * Atomically claim a batch of due requests for processing, marking them as [RequestProcessingStatus.Processing]
+     * until either they are finalised via [markProcessed], [markFailed] or [markDead], or until the given [lease]
+     * expires (after which they can be reclaimed by a subsequent call).
+     *
+     * Requests that were claimed previously but whose lease has now expired are reclaimed (returned to pending)
+     * before the next batch is selected, so that crashed or abandoned processors do not leave requests stuck.
+     *
+     * Request claims are exclusive: a request that is still within its lease will not be returned to another caller.
+     *
+     * @param batchSize the maximum number of requests to claim in a single batch
+     * @param atTime the time against which due requests are evaluated
+     * @param lease the duration for which a claim is held before it can be reclaimed by another processor
+     *
+     * @return the list of claimed requests in first-in-first-out order, limited to [batchSize]
+     */
+    fun claim(batchSize: Int, atTime: Instant, lease: Duration): List<PendingRequest>
+
+    data class PendingRequest(
+        val requestId: RequestId,
+        val request: Request,
+        val processingTime: Instant,
+        val failures: Int
+    )
+}
+
+sealed class PostboxError(val description: String) {
+    data object RequestNotFound : PostboxError("request not found")
+    data class StorageFailure(val cause: Exception) : PostboxError("storage failed (cause: ${cause.message})")
+    data class TransactionFailure(val cause: Exception) : PostboxError("transaction failed (cause: ${cause.message})")
+
+    companion object {
+        val RequestAlreadyProcessed = StorageFailure(IllegalStateException("request already processed"))
+        val RequestMarkedAsDead = StorageFailure(IllegalStateException("request already marked as dead"))
+    }
+}
+
+sealed class RequestProcessingStatus {
+    data class Pending(val failures: Int, val processAt: Instant) : RequestProcessingStatus()
+    data class Processing(val failures: Int, val processAt: Instant) : RequestProcessingStatus()
+    data class Processed(val response: Response) : RequestProcessingStatus()
+    data class Dead(val response: Response? = null) : RequestProcessingStatus()
+}
+
+class RequestId private constructor(value: String) : StringValue(value) {
+    companion object : StringValueFactory<RequestId>(
+        ::RequestId,
+        1.minLength.and(64.maxLength),
+        { it }
+    ) {
+        const val MAX_LENGTH = 64
+        val lens = Path.map(RequestId::of).of("requestId").asResult()
+    }
+}
+
+typealias TransactionalPostbox = Transactional<Postbox>
+
+fun <T> TransactionalPostbox.performAsResult(work: (Postbox) -> T): Result<T, Exception> =
+    try {
+        Success(perform(work))
+    } catch (e: Exception) {
+        Failure(e)
+    }
